@@ -38,7 +38,6 @@
 
   ::selection{background:var(--signal-blue);color:var(--abyss);}
 
-  /* film grain / water noise overlay */
   .noise{
     position:fixed;inset:0;
     pointer-events:none;
@@ -48,7 +47,6 @@
     mix-blend-mode:overlay;
   }
 
-  /* rising bubbles / oxygen particles */
   .bubbles{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden;}
   .bubble{
     position:absolute;
@@ -65,7 +63,6 @@
     100%{transform:translateY(-110vh) translateX(20px);opacity:0;}
   }
 
-  /* ============ NAV ============ */
   nav{
     position:fixed;top:0;left:0;right:0;
     display:flex;justify-content:space-between;align-items:center;
@@ -84,7 +81,6 @@
   }
   nav a:hover::after{width:100%;}
 
-  /* ============ HERO ============ */
   .hero{
     height:100vh;
     display:flex;flex-direction:column;justify-content:center;align-items:center;
@@ -165,7 +161,6 @@
     animation:pulse-line 2s ease-in-out infinite;}
   @keyframes pulse-line{0%,100%{opacity:0.3;}50%{opacity:1;}}
 
-  /* ============ MANIFESTO ============ */
   .manifesto{
     padding:180px 5vw;
     max-width:900px;
@@ -195,7 +190,6 @@
     max-width:640px;
   }
 
-  /* ============ GRID / POSTS (ITEMS) ============ */
   .archive{
     padding:100px 5vw 160px;
     position:relative;
@@ -284,7 +278,6 @@
   .item .info .tag{font-size:11px;color:var(--signal-blue);}
   .item .info .price{font-size:12px;color:var(--foam);}
 
-  /* ============ SOUND / MOTION SIGNATURE ============ */
   .signature{
     padding:160px 5vw;
     text-align:center;
@@ -326,7 +319,6 @@
   }
   .ring span{font-size:10px;letter-spacing:0.2em;color:var(--foam);}
 
-  /* ============ FOOTER ============ */
   footer{
     padding:80px 5vw 40px;
     border-top:1px solid rgba(233,237,240,0.1);
@@ -360,7 +352,6 @@
     .manifesto,.archive,.signature{padding-left:6vw;padding-right:6vw;}
   }
 
-  /* ============ SHARE BUTTON ============ */
   .share-btn{
     position:fixed;
     right:5vw;bottom:32px;
@@ -505,7 +496,6 @@
 </footer>
 
 <script>
-  // rising bubbles
   const bubbleContainer = document.getElementById('bubbles');
   const bubbleCount = 22;
   for(let i=0;i<bubbleCount;i++){
@@ -520,11 +510,8 @@
     bubbleContainer.appendChild(b);
   }
 
-  // ============ ТОВАРЫ ИЗ GOOGLE ТАБЛИЦЫ ============
-  // Вставь сюда ссылку на опубликованный CSV из Google Таблицы (см. гайд в чате)
   const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTOBTxiZK0_A81YpK5AHOlejgVjULo4y6osFKTb9ZN5Ncct_KDdVk5JU_l1GsI8QeSl8-RWOvd-KE1P/pub?gid=0&single=true&output=csv";
 
-  // запасные товары — показываются, если таблица не подключена или недоступна
   const fallbackItems = [
     {name:'Худи «Бездна»', tag:'верх', price:'6 400 ₽', label:'ХУДИ'},
     {name:'Лонгслив «Пузырь»', tag:'верх', price:'3 900 ₽', label:'ЛОНГ'},
@@ -558,7 +545,6 @@
     });
     itemCount.textContent = items.length + ' позиций / глубина растёт';
 
-    // scroll reveal — навешиваем заново на новые элементы
     const revealItems = document.querySelectorAll('.item');
     const observer = new IntersectionObserver((entries)=>{
       entries.forEach(entry=>{
@@ -600,7 +586,6 @@
 
   loadItems();
 
-  // share button
   const shareBtn = document.getElementById('shareBtn');
   const shareToast = document.getElementById('shareToast');
 
@@ -620,7 +605,6 @@
       try{
         await navigator.share(shareData);
       }catch(err){
-        // пользователь отменил — ничего не делаем
       }
     } else {
       try{
