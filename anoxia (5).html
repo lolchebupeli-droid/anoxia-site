@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANOXIA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root{
+    --abyss:#04070a;
+    --ink:#0c1620;
+    --deep-blue:#123049;
+    --signal-blue:#3a7ca5;
+    --pale:#e9edf0;
+    --foam:#b7c4cc;
+    --danger:#5fa8d3;
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+
+  html{scroll-behavior:smooth;}
+
+  body{
+    background:var(--abyss);
+    color:var(--pale);
+    font-family:'Space Mono', monospace;
+    overflow-x:hidden;
+    cursor:default;
+  }
+
+  h1,h2,h3,.display{
+    font-family:'Oswald', sans-serif;
+    text-transform:uppercase;
+    letter-spacing:0.02em;
+  }
+
+  ::selection{background:var(--signal-blue);color:var(--abyss);}
+
+  /* film grain / water noise overlay */
+  .noise{
+    position:fixed;inset:0;
+    pointer-events:none;
+    z-index:500;
+    opacity:0.035;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    mix-blend-mode:overlay;
+  }
+
+  /* rising bubbles / oxygen particles */
+  .bubbles{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden;}
+  .bubble{
+    position:absolute;
+    bottom:-40px;
+    border-radius:50%;
+    border:1px solid rgba(95,168,211,0.35);
+    background:radial-gradient(circle at 30% 30%, rgba(95,168,211,0.12), transparent 70%);
+    animation:rise linear infinite;
+  }
+  @keyframes rise{
+    0%{transform:translateY(0) translateX(0);opacity:0;}
+    10%{opacity:0.7;}
+    90%{opacity:0.4;}
+    100%{transform:translateY(-110vh) translateX(20px);opacity:0;}
+  }
+
+  /* ============ NAV ============ */
+  nav{
+    position:fixed;top:0;left:0;right:0;
+    display:flex;justify-content:space-between;align-items:center;
+    padding:24px 5vw;
+    z-index:100;
+    mix-blend-mode:difference;
+    font-size:12px;
+    letter-spacing:0.15em;
+  }
+  nav .mark{font-family:'Oswald',sans-serif;font-weight:700;font-size:16px;}
+  nav .links{display:flex;gap:32px;}
+  nav a{color:var(--pale);text-decoration:none;position:relative;}
+  nav a::after{
+    content:'';position:absolute;left:0;bottom:-4px;width:0;height:1px;
+    background:var(--pale);transition:width 0.3s ease;
+  }
+  nav a:hover::after{width:100%;}
+
+  /* ============ HERO ============ */
+  .hero{
+    height:100vh;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;
+    position:relative;
+    text-align:center;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 100%, var(--deep-blue) 0%, transparent 60%),
+      linear-gradient(180deg, var(--abyss) 0%, #060c12 60%, var(--ink) 100%);
+    overflow:hidden;
+  }
+
+  .hero .depth-lines{
+    position:absolute;inset:0;z-index:0;opacity:0.25;
+    background-image:repeating-linear-gradient(180deg, transparent 0 78px, rgba(58,124,165,0.4) 78px 79px);
+  }
+
+  .oxygen-meter{
+    position:absolute;top:100px;
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+    font-size:10px;letter-spacing:0.2em;color:var(--foam);
+    z-index:5;
+  }
+  .oxygen-bar{
+    width:2px;height:120px;
+    background:rgba(233,237,240,0.15);
+    position:relative;
+  }
+  .oxygen-bar span{
+    position:absolute;bottom:0;left:0;width:100%;
+    background:var(--signal-blue);
+    animation:deplete 8s ease-in-out infinite alternate;
+  }
+  @keyframes deplete{
+    0%{height:100%;}
+    100%{height:14%;}
+  }
+
+  .hero h1{
+    font-size:clamp(64px, 14vw, 180px);
+    font-weight:700;
+    line-height:0.85;
+    letter-spacing:0.02em;
+    position:relative;
+    z-index:2;
+    filter:blur(0px);
+    animation:submerge 6s ease-in-out infinite;
+  }
+  @keyframes submerge{
+    0%,100%{transform:translateY(0px);filter:blur(0px);}
+    50%{transform:translateY(6px);filter:blur(0.5px);}
+  }
+  .hero h1 span{
+    display:inline-block;
+    background:linear-gradient(180deg, var(--pale) 40%, var(--signal-blue) 100%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+
+  .hero .tagline{
+    margin-top:28px;
+    font-size:13px;
+    letter-spacing:0.35em;
+    text-transform:uppercase;
+    color:var(--foam);
+    z-index:2;
+  }
+
+  .hero .tagline .sep{color:var(--signal-blue);margin:0 10px;}
+
+  .scroll-cue{
+    position:absolute;bottom:40px;
+    font-size:10px;letter-spacing:0.2em;color:var(--foam);
+    display:flex;flex-direction:column;align-items:center;gap:10px;
+    z-index:2;
+  }
+  .scroll-cue .line{width:1px;height:40px;background:linear-gradient(180deg, var(--foam), transparent);
+    animation:pulse-line 2s ease-in-out infinite;}
+  @keyframes pulse-line{0%,100%{opacity:0.3;}50%{opacity:1;}}
+
+  /* ============ MANIFESTO ============ */
+  .manifesto{
+    padding:180px 5vw;
+    max-width:900px;
+    margin:0 auto;
+    position:relative;
+    z-index:2;
+  }
+  .eyebrow{
+    font-size:11px;letter-spacing:0.3em;color:var(--signal-blue);
+    margin-bottom:24px;display:block;
+  }
+  .manifesto h2{
+    font-size:clamp(32px,5vw,56px);
+    line-height:1.15;
+    font-weight:500;
+    color:var(--pale);
+  }
+  .manifesto h2 em{
+    font-style:normal;
+    color:var(--signal-blue);
+  }
+  .manifesto p{
+    margin-top:32px;
+    font-size:14px;
+    line-height:1.9;
+    color:var(--foam);
+    max-width:640px;
+  }
+
+  /* ============ GRID / POSTS (ITEMS) ============ */
+  .archive{
+    padding:100px 5vw 160px;
+    position:relative;
+    z-index:2;
+  }
+  .archive-head{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    margin-bottom:60px;
+    border-bottom:1px solid rgba(233,237,240,0.15);
+    padding-bottom:24px;
+    flex-wrap:wrap;
+    gap:20px;
+  }
+  .archive-head h2{font-size:clamp(28px,4vw,48px);}
+  .archive-head .count{font-size:12px;color:var(--foam);letter-spacing:0.1em;}
+
+  .loading-row{
+    padding:40px 0;
+    font-size:12px;
+    color:var(--foam);
+    letter-spacing:0.15em;
+    display:flex;align-items:center;gap:12px;
+  }
+  .loading-dot{
+    width:6px;height:6px;border-radius:50%;
+    background:var(--signal-blue);
+    animation:blink 1s ease-in-out infinite;
+  }
+  @keyframes blink{0%,100%{opacity:0.2;}50%{opacity:1;}}
+
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
+    gap:1px;
+    background:rgba(233,237,240,0.08);
+  }
+
+  .item{
+    background:var(--abyss);
+    padding:0;
+    position:relative;
+    opacity:0;
+    transform:translateY(40px);
+    transition:opacity 0.8s ease, transform 0.8s ease;
+  }
+  .item.visible{opacity:1;transform:translateY(0);}
+
+  .item .thumb{
+    aspect-ratio:3/4;
+    position:relative;
+    overflow:hidden;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(58,124,165,0.5), transparent 55%),
+      linear-gradient(160deg, var(--ink) 0%, var(--abyss) 100%);
+  }
+  .item .thumb::before{
+    content:attr(data-num);
+    position:absolute;top:16px;left:16px;
+    font-size:11px;color:var(--foam);letter-spacing:0.1em;
+    z-index:3;
+  }
+  .item .thumb::after{
+    content:'';
+    position:absolute;inset:0;
+    background:repeating-linear-gradient(180deg, transparent 0 3px, rgba(4,7,10,0.15) 3px 4px);
+    opacity:0.5;
+  }
+  .item .ripple{
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Oswald',sans-serif;
+    font-size:15px;
+    letter-spacing:0.15em;
+    color:rgba(233,237,240,0.35);
+    text-transform:uppercase;
+    transition:transform 0.6s cubic-bezier(.2,.8,.2,1), color 0.6s ease;
+  }
+  .item:hover .ripple{transform:scale(1.08);color:var(--pale);}
+  .item:hover .thumb{filter:brightness(1.15);}
+
+  .item .info{
+    padding:18px 4px 28px;
+    display:flex;justify-content:space-between;align-items:baseline;
+  }
+  .item .info .name{font-size:13px;letter-spacing:0.05em;}
+  .item .info .tag{font-size:11px;color:var(--signal-blue);}
+  .item .info .price{font-size:12px;color:var(--foam);}
+
+  /* ============ SOUND / MOTION SIGNATURE ============ */
+  .signature{
+    padding:160px 5vw;
+    text-align:center;
+    position:relative;
+    background:linear-gradient(180deg, var(--abyss), var(--ink) 50%, var(--abyss));
+  }
+  .signature h2{
+    font-size:clamp(40px,7vw,90px);
+    line-height:1;
+    color:var(--pale);
+  }
+  .signature .breath{
+    position:relative;
+    display:inline-block;
+    margin-top:20px;
+  }
+  .signature p{
+    max-width:520px;margin:36px auto 0;
+    font-size:13px;line-height:1.8;color:var(--foam);
+  }
+
+  .ring{
+    width:180px;height:180px;
+    border-radius:50%;
+    border:1px solid rgba(95,168,211,0.4);
+    margin:60px auto 0;
+    position:relative;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .ring::before,.ring::after{
+    content:'';position:absolute;inset:0;border-radius:50%;
+    border:1px solid rgba(95,168,211,0.25);
+    animation:expand 4s ease-out infinite;
+  }
+  .ring::after{animation-delay:2s;}
+  @keyframes expand{
+    0%{transform:scale(1);opacity:0.8;}
+    100%{transform:scale(1.8);opacity:0;}
+  }
+  .ring span{font-size:10px;letter-spacing:0.2em;color:var(--foam);}
+
+  /* ============ FOOTER ============ */
+  footer{
+    padding:80px 5vw 40px;
+    border-top:1px solid rgba(233,237,240,0.1);
+    display:flex;justify-content:space-between;align-items:flex-end;
+    flex-wrap:wrap;
+    gap:40px;
+    font-size:12px;
+    position:relative;z-index:2;
+  }
+  footer .col h3{font-size:12px;letter-spacing:0.15em;color:var(--foam);margin-bottom:14px;font-weight:400;font-family:'Space Mono',monospace;text-transform:uppercase;}
+  footer .col a{display:block;color:var(--pale);text-decoration:none;margin-bottom:8px;opacity:0.8;transition:opacity 0.3s;}
+  footer .col a:hover{opacity:1;color:var(--signal-blue);}
+  footer .bottom-line{
+    width:100%;
+    display:flex;justify-content:space-between;
+    padding-top:40px;
+    margin-top:40px;
+    border-top:1px solid rgba(233,237,240,0.08);
+    color:var(--foam);
+    font-size:11px;
+    letter-spacing:0.05em;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important;transition:none !important;}
+  }
+
+  @media (max-width:640px){
+    nav{padding:18px 6vw;}
+    nav .links{gap:16px;font-size:10px;}
+    .manifesto,.archive,.signature{padding-left:6vw;padding-right:6vw;}
+  }
+
+  /* ============ SHARE BUTTON ============ */
+  .share-btn{
+    position:fixed;
+    right:5vw;bottom:32px;
+    z-index:200;
+    display:flex;align-items:center;gap:10px;
+    padding:14px 22px;
+    background:rgba(4,7,10,0.75);
+    backdrop-filter:blur(6px);
+    border:1px solid rgba(95,168,211,0.4);
+    border-radius:999px;
+    color:var(--pale);
+    font-family:'Space Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.15em;
+    text-transform:uppercase;
+    cursor:pointer;
+    transition:border-color 0.3s ease, transform 0.3s ease, background 0.3s ease;
+  }
+  .share-btn:hover{
+    border-color:var(--signal-blue);
+    background:rgba(18,48,73,0.85);
+    transform:translateY(-2px);
+  }
+  .share-btn svg{width:14px;height:14px;flex-shrink:0;}
+  .toast{
+    position:fixed;
+    right:5vw;bottom:88px;
+    background:var(--signal-blue);
+    color:var(--abyss);
+    font-size:11px;letter-spacing:0.1em;
+    padding:10px 16px;
+    border-radius:6px;
+    opacity:0;
+    transform:translateY(10px);
+    transition:opacity 0.3s ease, transform 0.3s ease;
+    pointer-events:none;
+    z-index:200;
+  }
+  .toast.show{opacity:1;transform:translateY(0);}
+
+  @media (max-width:640px){
+    .share-btn{right:6vw;bottom:20px;padding:12px 18px;font-size:10px;}
+    .toast{right:6vw;bottom:78px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="noise"></div>
+<div class="bubbles" id="bubbles"></div>
+
+<button class="share-btn" id="shareBtn">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="18" cy="5" r="3"></circle>
+    <circle cx="6" cy="12" r="3"></circle>
+    <circle cx="18" cy="19" r="3"></circle>
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+  </svg>
+  Поделиться
+</button>
+<div class="toast" id="shareToast">Ссылка скопирована</div>
+
+<nav>
+  <div class="mark">ANOXIA</div>
+  <div class="links">
+    <a href="#manifesto">Идея</a>
+    <a href="#archive">Вещи</a>
+    <a href="#signature">Контакт</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="depth-lines"></div>
+
+  <div class="oxygen-meter">
+    <span>O₂</span>
+    <div class="oxygen-bar"><span></span></div>
+    <span>0%</span>
+  </div>
+
+  <h1><span>ANOXIA</span></h1>
+  <div class="tagline">Нехватка воздуха<span class="sep">/</span>Культ утопленников</div>
+
+  <div class="scroll-cue">
+    <span>ВНИЗ</span>
+    <div class="line"></div>
+  </div>
+</section>
+
+<section class="manifesto" id="manifesto">
+  <span class="eyebrow">О бренде</span>
+  <h2>Anoxia — это состояние, когда <em>воздуха больше нет</em>, а тело ещё не сдалось.</h2>
+  <p>
+    Мы делаем вещи для тех, кто не вписался в общий ритм дыхания. Для тех, кто живёт на глубине,
+    куда не доходит свет — и не хочет, чтобы доходил. Каждая вещь здесь — не одежда, а форма
+    сопротивления поверхности. Чёрный — это глубина. Белый — последний вдох. Синий — вода,
+    которая забирает и держит одновременно.
+  </p>
+  <p>
+    Это не масс-маркет и не тренд. Это архив для тех, кто узнаёт своих без слов.
+  </p>
+</section>
+
+<section class="archive" id="archive">
+  <div class="archive-head">
+    <h2>Архив вещей</h2>
+    <span class="count" id="itemCount">загрузка...</span>
+  </div>
+
+  <div class="grid" id="grid">
+    <!-- items generated by JS -->
+  </div>
+</section>
+
+<section class="signature" id="signature">
+  <span class="eyebrow">Дыши в ритме бренда</span>
+  <h2>Задержи<br>дыхание</h2>
+  <p>Подпишись на архив — новые вещи публикуются без анонса, партиями по 6, и не переиздаются.</p>
+  <div class="ring"><span>ПОДПИСКА</span></div>
+</section>
+
+<footer>
+  <div class="col">
+    <h3>Anoxia</h3>
+    <a href="#archive">Архив вещей</a>
+    <a href="#manifesto">Манифест</a>
+  </div>
+  <div class="col">
+    <h3>Связь</h3>
+    <a href="#">Telegram</a>
+    <a href="#">Почта</a>
+  </div>
+  <div class="col">
+    <h3>Город</h3>
+    <a href="#">Ростов-на-Дону</a>
+  </div>
+  <div class="bottom-line">
+    <span>© ANOXIA — все права утоплены</span>
+    <span>ГЛУБИНА: —∞</span>
+  </div>
+</footer>
+
+<script>
+  // rising bubbles
+  const bubbleContainer = document.getElementById('bubbles');
+  const bubbleCount = 22;
+  for(let i=0;i<bubbleCount;i++){
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    const size = 4 + Math.random()*22;
+    b.style.width = size+'px';
+    b.style.height = size+'px';
+    b.style.left = Math.random()*100+'vw';
+    b.style.animationDuration = (10 + Math.random()*14)+'s';
+    b.style.animationDelay = (Math.random()*14)+'s';
+    bubbleContainer.appendChild(b);
+  }
+
+  // ============ ТОВАРЫ ИЗ GOOGLE ТАБЛИЦЫ ============
+  // Вставь сюда ссылку на опубликованный CSV из Google Таблицы (см. гайд в чате)
+  const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTOBTxiZK0_A81YpK5AHOlejgVjULo4y6osFKTb9ZN5Ncct_KDdVk5JU_l1GsI8QeSl8-RWOvd-KE1P/pub?gid=0&single=true&output=csv";
+
+  // запасные товары — показываются, если таблица не подключена или недоступна
+  const fallbackItems = [
+    {name:'Худи «Бездна»', tag:'верх', price:'6 400 ₽', label:'ХУДИ'},
+    {name:'Лонгслив «Пузырь»', tag:'верх', price:'3 900 ₽', label:'ЛОНГ'},
+    {name:'Брюки «Придонный ил»', tag:'низ', price:'5 200 ₽', label:'БРЮКИ'},
+    {name:'Балаклава «Утопленник»', tag:'аксессуар', price:'2 100 ₽', label:'БАЛАКЛАВА'},
+    {name:'Куртка «Последний вдох»', tag:'верх', price:'9 800 ₽', label:'КУРТКА'},
+    {name:'Цепь «Якорь»', tag:'аксессуар', price:'2 700 ₽', label:'ЦЕПЬ'},
+  ];
+
+  const grid = document.getElementById('grid');
+  const itemCount = document.getElementById('itemCount');
+
+  function renderItems(items){
+    grid.innerHTML = '';
+    items.forEach((it, i)=>{
+      const el = document.createElement('div');
+      el.className = 'item';
+      el.innerHTML = `
+        <div class="thumb" data-num="${String(i+1).padStart(2,'0')}">
+          <div class="ripple">${it.label || it.name}</div>
+        </div>
+        <div class="info">
+          <div>
+            <div class="name">${it.name}</div>
+            <div class="tag">${it.tag}</div>
+          </div>
+          <div class="price">${it.price}</div>
+        </div>
+      `;
+      grid.appendChild(el);
+    });
+    itemCount.textContent = items.length + ' позиций / глубина растёт';
+
+    // scroll reveal — навешиваем заново на новые элементы
+    const revealItems = document.querySelectorAll('.item');
+    const observer = new IntersectionObserver((entries)=>{
+      entries.forEach(entry=>{
+        if(entry.isIntersecting){
+          entry.target.classList.add('visible');
+        }
+      });
+    },{threshold:0.15});
+    revealItems.forEach(el=>observer.observe(el));
+  }
+
+  function loadItems(){
+    if(!SHEET_CSV_URL){
+      renderItems(fallbackItems);
+      return;
+    }
+    grid.innerHTML = '<div class="loading-row"><div class="loading-dot"></div>Загружаем архив из таблицы...</div>';
+
+    Papa.parse(SHEET_CSV_URL, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: function(results){
+        const rows = results.data
+          .filter(r => r.name && r.name.trim())
+          .map(r => ({
+            name: r.name.trim(),
+            tag: (r.tag || '').trim(),
+            price: (r.price || '').trim(),
+            label: (r.label || r.name).trim()
+          }));
+        renderItems(rows.length ? rows : fallbackItems);
+      },
+      error: function(){
+        renderItems(fallbackItems);
+      }
+    });
+  }
+
+  loadItems();
+
+  // share button
+  const shareBtn = document.getElementById('shareBtn');
+  const shareToast = document.getElementById('shareToast');
+
+  function showToast(text){
+    shareToast.textContent = text;
+    shareToast.classList.add('show');
+    setTimeout(()=> shareToast.classList.remove('show'), 2200);
+  }
+
+  shareBtn.addEventListener('click', async ()=>{
+    const shareData = {
+      title: 'ANOXIA',
+      text: 'ANOXIA — культ утопленников. Вещи для тех, кто живёт на глубине.',
+      url: window.location.href
+    };
+    if(navigator.share){
+      try{
+        await navigator.share(shareData);
+      }catch(err){
+        // пользователь отменил — ничего не делаем
+      }
+    } else {
+      try{
+        await navigator.clipboard.writeText(shareData.url);
+        showToast('Ссылка скопирована');
+      }catch(err){
+        showToast('Не удалось скопировать');
+      }
+    }
+  });
+</script>
+
+</body>
+</html>
