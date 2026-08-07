@@ -110,6 +110,7 @@
     will-change:transform;
   }
 
+  /* система света: источник сверху, мягкие лучи, без тяжёлых фильтров */
   .hero .light-rays{
     position:absolute;inset:0;z-index:0;
     background:
@@ -130,6 +131,7 @@
     will-change:transform;
   }
 
+  /* плавное появление секций при скролле — "путешествие", а не листание */
   .reveal{
     opacity:0;
     transform:translateY(36px);
@@ -255,6 +257,20 @@
   .archive-head h2{font-size:clamp(28px,4vw,48px);}
   .archive-head .count{font-size:12px;color:var(--foam);letter-spacing:0.1em;}
 
+  .loading-row{
+    padding:40px 0;
+    font-size:12px;
+    color:var(--foam);
+    letter-spacing:0.15em;
+    display:flex;align-items:center;gap:12px;
+  }
+  .loading-dot{
+    width:6px;height:6px;border-radius:50%;
+    background:var(--signal-blue);
+    animation:blink 1s ease-in-out infinite;
+  }
+  @keyframes blink{0%,100%{opacity:0.2;}50%{opacity:1;}}
+
   .grid{
     display:grid;
     grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
@@ -269,11 +285,13 @@
     opacity:0;
     transform:translateY(40px);
     transition:opacity 0.8s ease, transform 0.8s ease;
+    --rx:0deg; --ry:0deg;
   }
   .item.visible{
     opacity:1;
-    transform:translateY(0);
+    transform:translateY(0) perspective(800px) rotateX(var(--rx)) rotateY(var(--ry));
   }
+  .item.tilting{transition:opacity 0.8s ease, transform 0.12s ease-out;}
 
   .item .thumb{
     aspect-ratio:3/4;
@@ -328,6 +346,11 @@
     line-height:1;
     color:var(--pale);
   }
+  .signature .breath{
+    position:relative;
+    display:inline-block;
+    margin-top:20px;
+  }
   .signature p{
     max-width:520px;margin:36px auto 0;
     font-size:13px;line-height:1.8;color:var(--foam);
@@ -360,12 +383,54 @@
   }
   .ring span{font-size:10px;letter-spacing:0.2em;color:var(--foam);position:relative;z-index:2;}
 
+  /* эффект "пульс останавливается" при клике */
+  .ring.pulse{animation:pulse-accelerate 0.9s ease-in-out forwards;}
+  @keyframes pulse-accelerate{
+    0%{transform:scale(1);}
+    8%{transform:scale(1.07);}
+    16%{transform:scale(1);}
+    30%{transform:scale(1.07);}
+    38%{transform:scale(1);}
+    48%{transform:scale(1.09);}
+    54%{transform:scale(1);}
+    62%{transform:scale(1.09);}
+    67%{transform:scale(1);}
+    73%{transform:scale(1.11);}
+    77%{transform:scale(1);}
+    82%{transform:scale(1.11);}
+    85%{transform:scale(1);}
+    100%{transform:scale(1);}
+  }
+  .ring.frozen{
+    animation:none !important;
+    transition:none !important;
+    transform:scale(1) !important;
+  }
+  .ring.frozen::before,
+  .ring.frozen::after{
+    animation-play-state:paused;
+  }
+
+  .ring.burst{animation:ring-burst 0.6s ease-out forwards;}
+  @keyframes ring-burst{
+    0%{transform:scale(1);}
+    30%{transform:scale(0.92);}
+    100%{transform:scale(2.4);opacity:0;}
+  }
   .breath-flash{
     position:absolute;inset:0;
     border-radius:50%;
     background:radial-gradient(circle, rgba(95,168,211,0.9) 0%, rgba(95,168,211,0) 70%);
     opacity:0;
     pointer-events:none;
+  }
+  .breath-flash.burst{
+    animation:flash-burst 0.6s ease-out forwards;
+  }
+  @keyframes flash-burst{
+    0%{opacity:0;transform:scale(0.8);}
+    40%{opacity:1;transform:scale(1.6);}
+    100%{opacity:0;transform:scale(2.8);}
   }
 
   /* ============ FOOTER ============ */
@@ -390,6 +455,10 @@
     color:var(--foam);
     font-size:11px;
     letter-spacing:0.05em;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important;transition:none !important;}
   }
 
   @media (max-width:640px){
@@ -438,6 +507,11 @@
     z-index:200;
   }
   .toast.show{opacity:1;transform:translateY(0);}
+
+  @media (max-width:640px){
+    .share-btn{right:6vw;bottom:20px;padding:12px 18px;font-size:10px;}
+    .toast{right:6vw;bottom:78px;}
+  }
 </style>
 </head>
 <body>
@@ -545,15 +619,55 @@
 </footer>
 
 <script>
-  // ============ ТОНУЩАЯ ФИГУРА ИЗ ПИКСЕЛЕЙ (ПОЛНЫЙ СИЛУЭТ С НОГАМИ) ============
+  // ============ ТОНУЩАЯ ФИГУРА ИЗ ПИКСЕЛЕЙ (v2, частицы + физика) ============
+  // Источник формы: процедурная геометрия (не пиксели фотографии — на анализ
+  // реального фото как источника частиц не соглашаюсь, см. чат).
+  // Всё остальное: плоский массив частиц {x,y,originX,originY,vx,vy,size,color,alpha,rotation},
+  // квадраты 2-4px, requestAnimationFrame, один canvas, без DOM-частиц.
+  // 0-90% скролла — фигура целая и дрейфует; 90-100% — разгон/падение;
+  // 100% — удар: гравитация + сопротивление воды + вращение,
+  // разлёт начинается снизу экрана и идёт вверх, частицы улетают физически.
   const initGirlCanvas = function(){
+    const initStartTime = performance.now();
+    const DEBUG_MODE = /[?&]debug=1/.test(location.search);
+    const debugStats = {
+      initTime: 0, buildSilhouetteTime: 0, particleCreateTime: 0, auraCreateTime: 0,
+      firstFrameTime: 0, particleCount: 0, drawnThisFrame: 0,
+      loopAuraMs: 0, loopMainMs: 0, loopBrokenMs: 0, loopBubblesMs: 0,
+      fps: 0, frameMs: 0
+    };
+    let debugHud = null;
+    if(DEBUG_MODE){
+      console.time('[girlCanvas] INIT TOTAL');
+      debugHud = document.createElement('div');
+      debugHud.style.cssText = 'position:fixed;top:8px;left:8px;z-index:99999;'
+        + 'background:rgba(0,0,0,0.78);color:#7fffb0;font:11px/1.5 monospace;'
+        + 'padding:8px 10px;border-radius:4px;white-space:pre;pointer-events:none;';
+      debugHud.textContent = 'girlCanvas debug: initializing...';
+      document.body.appendChild(debugHud);
+    }
+
     const canvas = document.getElementById('girlCanvas');
     const ctx = canvas.getContext('2d');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    const PERF = {dprCap: 1.5, particleTarget: 4500, envDensity: 0.06, useBlur: true};
+    // ---- адаптация под устройство: DPR, число частиц, использование blur ----
+    // грубая, но надёжная оценка мощности устройства без лишних измерений
+    const cores = navigator.hardwareConcurrency || 4;
+    const narrowScreen = window.innerWidth <= 768;
+    const veryNarrow = window.innerWidth <= 380;
+    const perfTier = (veryNarrow && cores <= 4) ? 'ultralow'
+                    : (narrowScreen && cores <= 4) ? 'low'
+                    : (narrowScreen || cores <= 4) ? 'mid' : 'high';
+    const PERF = {
+      ultralow: {dprCap: 1,    particleTarget: 2500, envDensity: 0.02,  useBlur: false, auraRatio: 8, skipWave: true},
+      low:      {dprCap: 1.25, particleTarget: 4000, envDensity: 0.045, useBlur: false, auraRatio: 7, skipWave: true},
+      mid:      {dprCap: 1.75, particleTarget: 5500, envDensity: 0.07,  useBlur: true,  auraRatio: 5, skipWave: false},
+      high:     {dprCap: 2,    particleTarget: 7000, envDensity: 0.09,  useBlur: true,  auraRatio: 4, skipWave: false}
+    }[perfTier];
 
-    // LUT для тригонометрии
+    // lookup-таблица sin/cos вместо трансцендентных вызовов в горячем пути —
+    // 2048 отсчётов на 2π, точности с запасом для визуального дрожания частиц
     const LUT_SIZE = 2048;
     const LUT_SCALE = LUT_SIZE / (Math.PI * 2);
     const SIN_LUT = new Float32Array(LUT_SIZE);
@@ -586,158 +700,726 @@
       ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
       buildEnvParticles();
     }
-    window.addEventListener('resize', resizeCanvas);
+    // debounce: resize на мобильных дёргается при скрытии адресной строки —
+    // пересчитываем не чаще раза в 150мс
+    let resizeTimer = null;
+    function debouncedResize(){
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(resizeCanvas, 150);
+    }
 
+    // фоновые частицы воды — независимый слой по всему экрану, не привязан
+    // к фигуре, скроллу или столкновению: просто ощущение толщи воды вокруг камеры
     let envParticles = [];
     function buildEnvParticles(){
-      const n = Math.round(window.innerWidth * PERF.envDensity);
+      const n = Math.round(Math.min(window.innerWidth, 1400) * PERF.envDensity);
       envParticles = [];
       for(let i = 0; i < n; i++){
+        const depth = 0.4 + Math.random() * 0.6;
         envParticles.push({
           x: Math.random() * window.innerWidth,
           y: Math.random() * window.innerHeight,
-          size: 0.8 + Math.random() * 1.5,
-          alpha: 0.04 + Math.random() * 0.06,
+          depth,
+          size: (0.6 + Math.random() * 1.4) * (0.6 + depth * 0.6),
+          alpha: (0.03 + Math.random() * 0.07) * depth,
+          phase: Math.random() * Math.PI * 2,
           speed: 0.05 + Math.random() * 0.08,
-          fall: 2 + Math.random() * 5
+          fall: 2 + Math.random() * 6
         });
       }
     }
 
-    // Геометрия тела: горизонтальная фигура (голова справа, ноги слева со стопами)
+    // ---- девушка 20 лет, горизонтально плывёт под водой ----
+    // Тело горизонтально (как на референсе Sea.jpg), лицо вниз.
+    // Голова справа, откинута назад. Ноги слева, расслаблены.
+    // Обе руки тянутся вверх-вправо (к поверхности/свету).
+    // Волосы средней длины. Силуэт тела без одежды.
+    // Все части ТОНКИЕ но достаточно толстые для частиц:
+    // руки 25px, шея 15px, V-вырез 20px. Тело ~40px.
+    // S-кривая: талия узкая, бёдра/ягодицы округлые.
     const LW = 480, LH = 240;
+
+    const silhouetteMap = [
+      // ===== ПЕРЕД (нижний край, слева направо: ступни → плечи) =====
+      {x:30,y:140},
+      {x:50,y:138},{x:75,y:136},{x:100,y:134},{x:125,y:132},
+      {x:145,y:131},{x:160,y:130},
+      // V-вырез между ног (очень широкий и глубокий: 50px, 25px = 80% тела)
+      {x:175,y:132},
+      {x:185,y:130},{x:195,y:118},{x:205,y:105},{x:215,y:118},{x:225,y:130},
+      {x:235,y:135},
+      // Ягодицы перед (широкие, выпуклые)
+      {x:250,y:142},{x:265,y:143},
+      // Талия перед (узкая)
+      {x:280,y:138},{x:295,y:136},
+      // Грудь перед
+      {x:310,y:138},{x:325,y:136},
+      // Плечи перед
+      {x:340,y:134},{x:355,y:133},
+      // ===== РУКИ ВВЕРХ (толстые 30px, наклон вправо) =====
+      {x:358,y:88},
+      {x:354,y:76},{x:350,y:64},{x:346,y:52},{x:342,y:40},
+      // Левая ладонь
+      {x:345,y:32},
+      // V между ладонями
+      {x:350,y:35},
+      // Правая ладонь
+      {x:355,y:32},
+      // Обратный путь рук
+      {x:360,y:40},{x:364,y:52},{x:368,y:64},{x:372,y:76},{x:376,y:88},
+      // ===== ШЕЯ (25px, чёткий разрыв между руками и головой) =====
+      {x:380,y:93},{x:405,y:88},
+      // ===== ГОЛОВА (большой овал 70px, высоко над текстом) =====
+      {x:418,y:82},{x:435,y:72},{x:452,y:58},{x:465,y:42},{x:472,y:25},
+      {x:470,y:10},{x:462,y:2},{x:450,y:0},{x:438,y:4},{x:425,y:14},
+      {x:416,y:26},{x:412,y:42},{x:412,y:58},{x:416,y:74},
+      // Волосы (бугорок на затылке, средние)
+      {x:408,y:58},{x:404,y:42},{x:408,y:25},{x:416,y:10},
+      // ===== СПИНА (вправо→влево, верхний край, S-кривая) =====
+      // От затылка вниз (оставаясь справа от рук, x>376)
+      {x:412,y:68},{x:410,y:78},{x:408,y:88},
+      {x:406,y:92},{x:404,y:93},
+      // Ниже основания рук (y=88), идём влево
+      {x:385,y:95},{x:370,y:97},
+      // Плечи спина (округлые)
+      {x:360,y:95},{x:345,y:93},
+      // Верхняя спина
+      {x:330,y:95},{x:315,y:97},
+      // Талия спина (опускается — тело сужается)
+      {x:300,y:99},{x:285,y:101},
+      // Талия (самая узкая точка)
+      {x:270,y:103},
+      // Ягодицы спина (поднимается — тело расширяется, S-кривая)
+      {x:255,y:97},{x:240,y:93},{x:225,y:91},
+      // Бёдра спина
+      {x:210,y:93},{x:195,y:95},
+      // Колени спина
+      {x:180,y:97},{x:165,y:99},
+      // Голени спина
+      {x:150,y:101},{x:135,y:103},
+      {x:120,y:105},{x:100,y:107},{x:80,y:109},{x:60,y:111},{x:40,y:113},
+      // Пятки
+      {x:30,y:118},{x:30,y:140}
+    ];
+
+    // ===== КАНВАС СИЛУЭТА (пиксельный спрайт) =====
+    // === ПИКСЕЛЬНЫЙ СПРАЙТ ДЕВУШКИ (из сгенерированного эскиза) ===
     const SIL_W = 200, SIL_H = 100;
     const silCanvas = document.createElement('canvas');
     silCanvas.width = SIL_W;
     silCanvas.height = SIL_H;
     const silCtx = silCanvas.getContext('2d');
-
-    // Процедурная отрисовка силуэта девушки с ногами и руками на вспомогательный канвас
     {
-      silCtx.fillStyle = '#b7c4cc';
-      silCtx.beginPath();
-      // Голова
-      silCtx.ellipse(150, 50, 22, 16, 0, 0, Math.PI * 2);
-      // Шея и корпус (горизонтально)
-      silCtx.roundRect(80, 42, 50, 18, 6);
-      // Бёдра и ноги (протянуты влево со стопами)
-      silCtx.roundRect(20, 40, 62, 16, 8);
-      // Руки (подняты кверху)
-      silCtx.roundRect(100, 22, 28, 12, 4);
-      silCtx.fill();
+      const SPRITE_PIXELS = [[0, [[170, 172, 111, 118, 129], [175, 199, 112, 120, 131]]], [1, [[175, 199, 113, 121, 132]]], [2, [[175, 199, 112, 120, 131]]], [3, [[174, 177, 110, 117, 128], [179, 199, 113, 121, 132]]], [4, [[172, 173, 112, 120, 131], [176, 176, 115, 122, 133], [179, 179, 110, 117, 128], [182, 183, 113, 121, 132], [187, 187, 109, 117, 128], [189, 190, 110, 118, 129], [193, 195, 114, 122, 133], [198, 198, 109, 117, 128]]], [5, [[171, 172, 112, 120, 131], [175, 175, 110, 118, 129], [177, 194, 112, 120, 131]]], [6, [[171, 172, 114, 121, 132], [174, 175, 111, 119, 130], [177, 179, 113, 121, 132], [181, 184, 112, 120, 131], [187, 187, 109, 117, 128], [189, 195, 110, 117, 128]]], [7, [[176, 176, 110, 118, 129], [189, 193, 110, 118, 129], [195, 195, 110, 117, 128]]], [8, [[175, 176, 110, 118, 129], [182, 184, 110, 118, 129], [189, 190, 110, 117, 128], [192, 193, 110, 118, 129]]], [11, [[123, 125, 170, 180, 191]]], [12, [[123, 126, 146, 155, 166]]], [13, [[126, 129, 122, 130, 141]]], [14, [[122, 125, 187, 197, 209], [128, 131, 199, 209, 221]]], [15, [[124, 127, 127, 135, 146], [129, 133, 167, 176, 188]]], [16, [[131, 135, 190, 200, 212]]], [17, [[131, 136, 131, 139, 150]]], [18, [[132, 137, 129, 137, 148]]], [19, [[133, 138, 172, 181, 193]]], [20, [[127, 129, 196, 206, 218], [133, 140, 162, 171, 183]]], [21, [[128, 140, 167, 176, 188]]], [22, [[129, 141, 135, 143, 154]]], [23, [[132, 143, 147, 155, 167]]], [24, [[133, 144, 173, 182, 194]]], [25, [[136, 145, 108, 116, 129]]], [26, [[101, 106, 114, 122, 136], [140, 145, 102, 110, 123]]], [27, [[102, 107, 101, 109, 122], [141, 145, 115, 124, 137]]], [28, [[103, 107, 91, 99, 112], [109, 110, 152, 161, 176], [142, 147, 127, 136, 150]]], [29, [[99, 111, 100, 108, 121], [142, 147, 125, 134, 148]]], [30, [[104, 112, 152, 162, 177], [142, 148, 111, 119, 133]]], [31, [[101, 113, 150, 160, 175], [143, 148, 115, 123, 137]]], [32, [[99, 101, 116, 125, 139], [105, 115, 134, 143, 158], [143, 150, 103, 111, 124]]], [33, [[103, 116, 96, 104, 117], [144, 150, 112, 121, 134]]], [34, [[110, 118, 117, 126, 140], [144, 150, 113, 122, 135], [184, 184, 99, 107, 120]]], [35, [[111, 119, 116, 125, 138], [144, 152, 110, 119, 132], [184, 184, 152, 162, 177]]], [36, [[112, 120, 97, 105, 118], [144, 152, 94, 102, 115], [184, 184, 154, 164, 179]]], [37, [[114, 121, 116, 125, 139], [145, 153, 112, 121, 134], [197, 197, 154, 164, 179]]], [38, [[116, 122, 91, 99, 112], [145, 154, 112, 120, 134], [197, 197, 151, 161, 175]]], [39, [[118, 123, 112, 120, 134], [146, 155, 118, 127, 140], [192, 192, 154, 164, 179], [196, 197, 150, 160, 175]]], [40, [[119, 124, 121, 130, 143], [146, 155, 119, 128, 141], [192, 192, 146, 156, 171], [196, 196, 140, 150, 164]]], [41, [[120, 125, 118, 127, 141], [146, 156, 91, 99, 112], [192, 192, 148, 157, 172]]], [42, [[121, 127, 121, 130, 143], [147, 156, 109, 117, 131], [191, 192, 128, 137, 151]]], [43, [[122, 128, 108, 116, 129], [147, 157, 103, 111, 125], [183, 183, 131, 141, 155], [190, 191, 86, 94, 107], [194, 194, 124, 133, 147], [199, 199, 95, 103, 115]]], [44, [[122, 129, 117, 125, 139], [148, 157, 108, 116, 130], [183, 183, 131, 140, 154], [190, 190, 130, 139, 154], [193, 195, 96, 103, 116], [198, 199, 153, 163, 178]]], [45, [[123, 130, 129, 138, 152], [148, 158, 107, 115, 128], [181, 181, 148, 158, 173], [183, 184, 138, 147, 162], [190, 190, 145, 155, 170], [193, 196, 103, 111, 124], [198, 199, 155, 165, 180]]], [46, [[124, 132, 115, 123, 137], [149, 158, 110, 118, 132], [181, 181, 118, 126, 140], [183, 184, 153, 163, 178], [190, 191, 137, 146, 161], [195, 199, 123, 132, 146]]], [47, [[61, 67, 154, 164, 179], [125, 133, 110, 119, 132], [150, 158, 115, 123, 137], [181, 181, 145, 154, 169], [183, 184, 146, 155, 170], [189, 189, 107, 115, 129], [194, 199, 121, 130, 144]]], [48, [[60, 68, 155, 165, 180], [126, 134, 110, 119, 132], [150, 158, 116, 124, 138], [180, 180, 148, 158, 173], [183, 184, 96, 104, 117], [188, 189, 109, 118, 131], [192, 192, 109, 117, 130], [194, 199, 115, 124, 137]]], [49, [[57, 70, 150, 160, 174], [126, 136, 87, 95, 107], [150, 159, 100, 108, 121], [180, 182, 129, 139, 153], [184, 184, 107, 115, 129], [187, 188, 99, 107, 120], [192, 199, 103, 111, 125]]], [50, [[57, 71, 93, 103, 119], [127, 137, 70, 79, 93], [152, 160, 87, 96, 113], [179, 179, 93, 103, 120], [181, 181, 84, 93, 109], [184, 184, 68, 76, 91], [187, 188, 63, 71, 85], [191, 194, 70, 78, 93], [196, 199, 80, 90, 105]]], [51, [[56, 74, 94, 104, 121], [128, 137, 74, 83, 98], [153, 160, 73, 81, 96], [178, 180, 93, 103, 119], [185, 185, 71, 79, 94], [187, 188, 66, 75, 89], [192, 194, 67, 76, 90], [196, 199, 82, 91, 107]]], [52, [[55, 76, 95, 105, 122], [128, 139, 69, 77, 92], [153, 161, 78, 87, 102], [178, 178, 94, 104, 121], [180, 180, 93, 103, 120], [185, 188, 69, 78, 93], [191, 194, 68, 76, 91], [196, 199, 92, 101, 118]]], [53, [[55, 60, 95, 105, 122], [62, 77, 55, 63, 77], [130, 140, 82, 91, 107], [153, 162, 66, 74, 88], [178, 178, 94, 104, 121], [180, 180, 94, 104, 121], [185, 186, 68, 76, 91], [188, 188, 71, 79, 94], [191, 193, 66, 74, 88], [195, 199, 94, 104, 121]]], [54, [[54, 60, 66, 74, 88], [63, 79, 56, 63, 77], [131, 141, 66, 74, 89], [153, 162, 63, 71, 86], [178, 180, 92, 102, 119], [185, 186, 68, 76, 91], [188, 193, 67, 75, 90], [195, 199, 93, 103, 120]]], [55, [[54, 56, 66, 74, 89], [58, 58, 64, 72, 87], [60, 80, 61, 68, 82], [131, 141, 65, 73, 87], [153, 162, 56, 64, 77], [179, 180, 70, 79, 94], [185, 188, 68, 76, 90], [190, 191, 62, 70, 84], [193, 199, 65, 74, 88]]], [56, [[54, 82, 65, 74, 88], [132, 143, 56, 64, 78], [154, 163, 70, 78, 93], [180, 181, 63, 71, 85], [184, 184, 75, 84, 99], [186, 191, 64, 72, 86], [193, 193, 67, 76, 90], [195, 199, 93, 103, 120]]], [57, [[53, 54, 61, 69, 83], [59, 61, 56, 64, 77], [64, 82, 58, 66, 80], [133, 143, 63, 71, 85], [155, 164, 72, 80, 95], [182, 185, 62, 70, 84], [187, 190, 65, 73, 88], [195, 199, 84, 93, 109]]], [58, [[53, 53, 62, 70, 84], [65, 65, 56, 63, 77], [67, 85, 57, 64, 78], [135, 145, 69, 78, 93], [155, 164, 60, 68, 82], [181, 186, 94, 104, 121], [188, 189, 62, 70, 84], [197, 198, 95, 105, 122]]], [59, [[53, 53, 60, 68, 82], [67, 87, 58, 65, 79], [135, 147, 57, 65, 78], [156, 164, 59, 66, 80], [176, 179, 77, 86, 102], [181, 194, 94, 104, 120], [197, 198, 95, 105, 122]]], [60, [[53, 53, 60, 68, 82], [69, 87, 59, 67, 81], [136, 148, 68, 76, 90], [157, 165, 70, 79, 93], [175, 195, 89, 99, 115], [197, 199, 95, 105, 122]]], [61, [[53, 53, 62, 70, 84], [68, 89, 58, 66, 80], [138, 155, 60, 68, 82], [158, 165, 72, 81, 96], [175, 187, 94, 104, 121], [189, 198, 70, 78, 93]]], [62, [[70, 90, 59, 67, 81], [138, 138, 67, 76, 90], [141, 166, 70, 78, 93], [175, 187, 72, 81, 96], [189, 198, 80, 89, 105]]], [63, [[73, 92, 59, 67, 81], [142, 167, 70, 78, 93], [175, 199, 72, 80, 95]]], [64, [[51, 51, 57, 65, 79], [74, 93, 58, 65, 79], [142, 167, 69, 77, 92], [175, 197, 70, 79, 93]]], [65, [[51, 51, 59, 67, 81], [75, 94, 58, 65, 79], [137, 137, 93, 103, 119], [143, 168, 68, 76, 91], [175, 199, 68, 77, 92]]], [66, [[51, 51, 59, 66, 80], [76, 96, 59, 67, 81], [133, 138, 94, 104, 121], [144, 169, 61, 69, 83], [175, 199, 70, 78, 93]]], [67, [[51, 51, 57, 64, 78], [77, 97, 60, 68, 82], [130, 140, 94, 104, 121], [145, 169, 68, 76, 91], [175, 199, 72, 80, 95]]], [68, [[44, 49, 58, 66, 80], [51, 51, 56, 64, 77], [78, 99, 59, 67, 81], [126, 140, 93, 102, 119], [146, 146, 64, 73, 87], [148, 170, 69, 77, 92], [174, 197, 93, 103, 120]]], [69, [[43, 48, 56, 64, 78], [79, 99, 58, 66, 79], [124, 141, 95, 105, 122], [149, 170, 69, 78, 93], [173, 177, 93, 103, 119], [179, 197, 67, 75, 90]]], [70, [[42, 44, 57, 65, 79], [50, 52, 57, 65, 78], [81, 100, 58, 66, 80], [118, 142, 71, 80, 95], [150, 177, 69, 77, 92], [180, 190, 56, 64, 77], [194, 197, 85, 94, 110]]], [71, [[41, 42, 57, 65, 78], [44, 44, 56, 63, 77], [50, 50, 55, 63, 77], [81, 101, 59, 67, 81], [113, 143, 60, 67, 81], [149, 177, 57, 65, 78], [183, 187, 82, 92, 108], [189, 193, 73, 82, 97], [195, 195, 93, 103, 120], [197, 199, 84, 94, 110]]], [72, [[40, 42, 57, 65, 79], [82, 102, 58, 66, 80], [111, 144, 95, 105, 122], [150, 150, 66, 74, 88], [152, 179, 68, 76, 91], [184, 184, 95, 105, 122], [187, 188, 64, 72, 86], [191, 191, 72, 80, 95], [199, 199, 59, 67, 81]]], [73, [[39, 40, 56, 63, 77], [42, 42, 55, 63, 77], [82, 82, 57, 65, 79], [84, 141, 59, 67, 81], [143, 145, 64, 72, 86], [152, 177, 64, 72, 87], [184, 184, 95, 105, 122], [197, 197, 70, 78, 93], [199, 199, 68, 77, 92]]], [74, [[38, 39, 56, 64, 77], [83, 141, 57, 65, 78], [143, 143, 59, 67, 81], [145, 146, 64, 72, 87], [154, 177, 56, 64, 78], [185, 187, 93, 103, 120], [194, 198, 76, 85, 100]]], [75, [[37, 38, 33, 40, 52], [84, 84, 33, 40, 52], [86, 142, 34, 41, 53], [154, 169, 33, 40, 52], [171, 177, 39, 46, 59], [187, 188, 38, 45, 58], [197, 197, 33, 40, 52]]], [76, [[36, 37, 33, 40, 52], [85, 85, 33, 40, 52], [87, 143, 34, 41, 53], [155, 155, 34, 40, 52], [157, 170, 36, 43, 55], [172, 175, 37, 44, 57]]], [77, [[85, 86, 34, 41, 53], [88, 143, 34, 41, 53], [155, 156, 34, 41, 53], [158, 171, 36, 43, 56], [174, 174, 37, 44, 56]]], [78, [[88, 131, 33, 40, 52], [134, 134, 34, 41, 53], [136, 137, 34, 41, 53], [139, 139, 36, 42, 55], [141, 142, 36, 42, 55], [158, 171, 32, 39, 51], [174, 174, 35, 42, 54]]], [79, [[32, 33, 33, 40, 52], [88, 88, 33, 40, 52], [90, 128, 34, 41, 53], [130, 131, 34, 41, 53], [133, 134, 34, 40, 52], [137, 138, 35, 41, 54], [160, 171, 35, 41, 54]]], [80, [[33, 33, 34, 41, 53], [91, 127, 34, 40, 53], [130, 131, 33, 39, 51], [133, 133, 33, 40, 52], [160, 161, 35, 41, 54], [163, 171, 37, 44, 56], [194, 196, 38, 46, 58]]], [81, [[93, 122, 34, 41, 53], [124, 124, 35, 42, 54], [161, 161, 35, 42, 54], [163, 171, 37, 44, 56]]], [82, [[46, 46, 33, 40, 52], [94, 117, 34, 41, 53], [120, 121, 36, 43, 55], [124, 124, 34, 40, 52], [162, 171, 34, 41, 53]]], [83, [[46, 46, 33, 39, 52], [95, 118, 34, 40, 52], [162, 164, 33, 39, 51], [166, 167, 36, 43, 56], [169, 170, 38, 45, 57]]], [84, [[46, 46, 32, 39, 51], [96, 119, 34, 40, 52], [167, 168, 35, 42, 54], [170, 170, 33, 40, 52]]], [85, [[98, 118, 35, 42, 54]]], [86, [[97, 116, 34, 41, 53]]], [87, [[97, 97, 33, 40, 52], [100, 101, 34, 41, 53], [103, 113, 34, 41, 53], [115, 116, 35, 42, 54]]], [88, [[101, 101, 33, 40, 52], [103, 111, 34, 41, 53], [113, 114, 35, 42, 54]]], [89, [[104, 105, 33, 39, 51], [107, 107, 35, 42, 55], [110, 111, 34, 41, 53], [114, 114, 33, 40, 52]]], [91, [[108, 109, 33, 39, 51]]], [92, [[108, 108, 33, 40, 52]]]];
+
+      // Отрисовка пикселей спрайта
+      for(const [y, runs] of SPRITE_PIXELS){
+        for(const [x1, x2, r, g, b] of runs){
+          silCtx.fillStyle = `rgb(${r},${g},${b})`;
+          silCtx.fillRect(x1, y, x2 - x1 + 1, 1);
+        }
+      }
     }
 
     function buildSilhouettePoints(){
       const off = document.createElement('canvas');
       off.width = LW; off.height = LH;
       const octx = off.getContext('2d');
+      // Используем пиксельный спрайт из silCanvas
       octx.imageSmoothingEnabled = false;
       octx.drawImage(silCanvas, 0, 0, LW, LH);
 
       const img = octx.getImageData(0, 0, LW, LH).data;
+      const alphaAt = (x, y) => {
+        if(x < 0 || x >= LW || y < 0 || y >= LH) return 0;
+        return img[(y * LW + x) * 4 + 3];
+      };
       const pts = [];
-      for(let y = 0; y < LH; y+=2){
-        for(let x = 0; x < LW; x+=2){
-          if(img[(y * LW + x) * 4 + 3] > 100){
-            pts.push({x: x - LW / 2, y: y - LH / 2});
-          }
+      // многорадиусный feathering: близкие offsets дают резкость ядра,
+      // дальние — мягкое, неоднородное рассеивание к краю (не жёсткая кромка)
+      for(let y = 0; y < LH; y++){
+        for(let x = 0; x < LW; x++){
+          if(alphaAt(x, y) <= 120) continue;
+          let outsideNear = 0, outsideFar = 0;
+          const near = [[3,0],[-3,0],[0,3],[0,-3]];
+          const far = [[8,0],[-8,0],[0,8],[0,-8],[6,6],[-6,6],[6,-6],[-6,-6]];
+          for(const [ox, oy] of near){ if(alphaAt(x + ox, y + oy) <= 120) outsideNear++; }
+          for(const [ox, oy] of far){ if(alphaAt(x + ox, y + oy) <= 120) outsideFar++; }
+          const edgeScore = Math.min(1, outsideNear / near.length * 0.5 + outsideFar / far.length * 0.3);
+          const keepProb = edgeScore === 0 ? 1 : Math.max(0.4, 1 - edgeScore * 0.6);
+          if(Math.random() > keepProb) continue;
+          pts.push({x: x - LW / 2, y: y - LH / 2, edge: edgeScore});
         }
+      }
+      // Fisher-Yates + обрезка до целевого диапазона 3000-5000 точек
+      const target = PERF.particleTarget;
+      if(pts.length > target){
+        for(let i = pts.length - 1; i > 0; i--){
+          const j = Math.floor(Math.random() * (i + 1));
+          [pts[i], pts[j]] = [pts[j], pts[i]];
+        }
+        pts.length = target;
       }
       return pts;
     }
 
+    const t_buildStart = DEBUG_MODE ? performance.now() : 0;
+    if(DEBUG_MODE) console.time('[girlCanvas] buildSilhouettePoints');
     const basePoints = buildSilhouettePoints();
-    const palette = [[228, 232, 236], [165, 172, 180], [68, 76, 88], [5, 10, 16]];
+    if(DEBUG_MODE){
+      console.timeEnd('[girlCanvas] buildSilhouettePoints');
+      debugStats.buildSilhouetteTime = performance.now() - t_buildStart;
+    }
 
+    // палитра объёма: монохром с высоким контрастом (по ч/б референсу).
+    // свет сверху — почти белый, глубина снизу — почти чёрный.
+    const palette = [
+      {stop: 0.0,  color: [228, 232, 236]}, // почти белый (верх, поверхность/свет)
+      {stop: 0.30, color: [165, 172, 180]}, // светло-серый
+      {stop: 0.65, color: [68, 76, 88]},    // тёмный серо-синий
+      {stop: 1.0,  color: [5, 10, 16]}       // почти чёрный (низ, глубина)
+    ];
+    function paletteColor(t){
+      t = Math.min(Math.max(t, 0), 1);
+      let a = palette[0], b = palette[palette.length - 1];
+      for(let i = 0; i < palette.length - 1; i++){
+        if(t >= palette[i].stop && t <= palette[i + 1].stop){
+          a = palette[i]; b = palette[i + 1]; break;
+        }
+      }
+      const span = (b.stop - a.stop) || 1;
+      const lt = (t - a.stop) / span;
+      const r = Math.round(a.color[0] + (b.color[0] - a.color[0]) * lt);
+      const g = Math.round(a.color[1] + (b.color[1] - a.color[1]) * lt);
+      const bl = Math.round(a.color[2] + (b.color[2] - a.color[2]) * lt);
+      return [r, g, bl];
+    }
+
+    // зоны разрушения по телу (вдоль x, от ступней к голове):
+    // ноги -> таз -> корпус -> руки -> голова. Волна распада идёт в этом порядке.
+    const ZONES = [
+      {name: 'legs',  xMax: -120, order: 0},
+      {name: 'hips',  xMax: 0,    order: 1},
+      {name: 'torso', xMax: 96,   order: 2},
+      {name: 'arms',  xMax: 200,  order: 3},
+      {name: 'head',  xMax: 999,  order: 4}
+    ];
+    function zoneOrderFor(lx){
+      for(const z of ZONES){ if(lx <= z.xMax) return z.order; }
+      return ZONES[ZONES.length - 1].order;
+    }
+
+    // квантование цвета в "бакеты": вместо уникальной строки rgb() почти на
+    // каждую частицу — ограниченный набор готовых строк. Резко сокращает
+    // число смен ctx.fillStyle за кадр (самая дорогая операция в этом рендере)
+    const T_STEPS = 8, B_STEPS = 4;
+    const bucketColorCache = new Map();
+    function bucketColorFor(t, brightness){
+      const tIdx = Math.min(T_STEPS - 1, Math.floor(t * T_STEPS));
+      const bIdx = Math.min(B_STEPS - 1, Math.floor(((brightness - 0.55) / 0.6) * B_STEPS));
+      const key = tIdx * B_STEPS + Math.max(0, bIdx);
+      let color = bucketColorCache.get(key);
+      if(!color){
+        const [r, g, b] = paletteColor((tIdx + 0.5) / T_STEPS);
+        const bMid = 0.55 + (Math.max(0, bIdx) + 0.5) / B_STEPS * 0.6;
+        color = `rgb(${Math.min(255, Math.round(r * bMid))},${Math.min(255, Math.round(g * bMid))},${Math.min(255, Math.round(b * bMid))})`;
+        bucketColorCache.set(key, color);
+      }
+      return {color, key};
+    }
+
+    const t_particleStart = DEBUG_MODE ? performance.now() : 0;
+    if(DEBUG_MODE) console.time('[girlCanvas] particle array create+sort');
     const particles = basePoints.map(p => {
-      const t = (p.y + LH / 2) / LH;
+      const rawY = p.y + LH / 2; // 0..LH, верх фигуры -> низ
+      const t = Math.min(Math.max((rawY - 0) / (LH - 0), 0), 1);
+      // яркость: центр тела ярче, край и задний слой — тусклее и прозрачнее
+      const depth = Math.random() < 0.5 ? 0.5 : 1; // задний / передний слой
+      const edge = p.edge || 0;
+      const brightness = (0.7 + depth * 0.3) * (1 - edge * 0.35) * (0.9 + Math.random() * 0.25);
+      // шум плотности: не сетка, а неоднородные "облака" частиц —
+      // низкочастотная псевдослучайная модуляция по координате
+      const densityNoise = 0.5 + 0.5 * Math.abs(Math.sin(p.x * 0.11) * Math.cos(p.y * 0.13) + Math.sin(p.x * 0.05 + p.y * 0.07));
+      // размер: передний слой крупнее и заметнее, задний — мельче;
+      // часть крупных пятен в глубине тела, часть мелкой пыли — у контура
+      const sizeRoll = Math.random();
+      const baseSize = sizeRoll > 0.92 ? (2.2 + Math.random() * 1.6)
+                      : sizeRoll > 0.6 ? (1.2 + Math.random() * 1.0)
+                      : (0.6 + Math.random() * 0.8);
+      const { color, key } = bucketColorFor(t, brightness);
       return {
         lx: p.x, ly: p.y,
         phase: Math.random() * Math.PI * 2,
-        speed: 0.2 + Math.random() * 0.3,
-        size: 1 + Math.random() * 1.5,
-        color: `rgb(${palette[Math.floor(t * 3)][0]},${palette[Math.floor(t * 3)][1]},${palette[Math.floor(t * 3)][2]})`
+        speed: (0.2 + Math.random() * 0.2) * (0.6 + depth * 0.4),
+        depth,
+        edge,
+        densityNoise: Math.min(1, densityNoise),
+        size: baseSize * (0.7 + depth * 0.5) * (edge > 0.4 ? 0.75 : 1),
+        color,
+        colorBucket: key,
+        // доля частиц, которые "остаются плавать" после удара, а не тонут вместе со всеми
+        floatWeight: Math.random(),
+        // часть краевых частиц используется как отстающий след погружения
+        trailParticle: edge > 0.35 && Math.random() < 0.4,
+        zoneOrder: zoneOrderFor(p.x),
+        // физика распада (заполняется в момент удара)
+        vx: 0, vy: 0, gravityScale: 1,
+        broken: false,
+        flying: false,
+        flyStart: 0,
+        originX: 0, originY: 0,
+        settleTimer: 0
       };
     });
+    // сортировка по цветовому бакету — частицы одного цвета идут подряд,
+    // это не влияет на физику (частицы независимы), только на порядок отрисовки
+    particles.sort((a, b) => a.colorBucket - b.colorBucket);
+    if(DEBUG_MODE){
+      console.timeEnd('[girlCanvas] particle array create+sort');
+      debugStats.particleCreateTime = performance.now() - t_particleStart;
+      debugStats.particleCount = particles.length;
+    }
+
+    // "дымка распада": рассеянные частицы-спутники вокруг тела — не часть
+    // физики удара, чисто художественный слой, читается как след/аура в воде
+    const t_auraStart = DEBUG_MODE ? performance.now() : 0;
+    if(DEBUG_MODE) console.time('[girlCanvas] auraParticles create');
+    const auraParticles = [];
+    for(let i = 0; i < basePoints.length; i += PERF.auraRatio){
+      const p = basePoints[i];
+      if(!p) continue;
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 6 + Math.random() * 34;
+      const rawY = p.y + LH / 2;
+      const t = Math.min(Math.max((rawY - 0) / (LH - 0), 0), 1);
+      const [r, g, b] = paletteColor(t);
+      auraParticles.push({
+        lx: p.x + Math.cos(angle) * dist,
+        ly: p.y + Math.sin(angle) * dist * 0.6,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.1 + Math.random() * 0.3,
+        drift: 4 + Math.random() * 10,
+        size: 0.5 + Math.random() * 2.2,
+        alpha: 0.03 + Math.random() * 0.1,
+        color: `rgb(${r},${g},${b})`
+      });
+    }
+    if(DEBUG_MODE){
+      console.timeEnd('[girlCanvas] auraParticles create');
+      debugStats.auraCreateTime = performance.now() - t_auraStart;
+    }
 
     function getScale(){
-      return Math.min(window.innerWidth * 0.75, 720) / LW;
+      const targetW = Math.min(window.innerWidth * 0.7, 760);
+      return targetW / LW;
     }
 
     function getScrollProgress(){
       const doc = document.documentElement;
       const scrollTop = window.scrollY || doc.scrollTop || 0;
       const max = doc.scrollHeight - window.innerHeight;
-      return max <= 0 ? 0 : Math.min(Math.max(scrollTop / max, 0), 1);
+      if(max <= 0) return 0;
+      return Math.min(Math.max(scrollTop / max, 0), 1);
     }
 
-    let lastT = performance.now();
+    function easeInQuad(t){ return t * t; }
+
+    // распад необратим: считаем от максимально достигнутого скролла
+    let maxScrollReached = 0;
+    let hasBroken = false;
+    let triggerTime = 0;
+    const COMPRESS_MS = 90;   // сжатие к точке удара перед взрывом
+    const ZONE_STEP_MS = 70;  // задержка волны между зонами тела
+    let centroidX = 0, centroidY = 0;
+    let bubbles = [];
+
+    function currentHome(p, scale, anchorX, anchorTop, time){
+      if(reduceMotion || PERF.skipWave){
+        return { x: anchorX + p.lx * scale, y: anchorTop + p.ly * scale };
+      }
+      const ampX = 1 + p.depth * 1.5;
+      const ampY = 1 + p.depth * 1.0;
+      const waveX = fastSin(time * p.speed + p.ly) * ampX * 0.6;
+      const waveY = fastCos(time * p.speed) * ampY * 0.5;
+      return {
+        x: anchorX + p.lx * scale + waveX,
+        y: anchorTop + p.ly * scale + waveY
+      };
+    }
+
+    function triggerBreak(scale, anchorX, anchorTop, time){
+      hasBroken = true;
+      triggerTime = performance.now();
+      let sx = 0, sy = 0;
+      for(const p of particles){
+        const home = currentHome(p, scale, anchorX, anchorTop, time);
+        p.originX = home.x;
+        p.originY = home.y;
+        sx += home.x; sy += home.y;
+        // ~18% частиц "остаются плавать" — почти не тонут, как будто вода их держит
+        p.gravityScale = p.floatWeight < 0.18 ? 0.12 : 1;
+      }
+      centroidX = sx / particles.length;
+      centroidY = sy / particles.length;
+
+      // пузырьки удара
+      bubbles = [];
+      const bubbleN = 90;
+      for(let i = 0; i < bubbleN; i++){
+        bubbles.push({
+          x: centroidX + (Math.random() - 0.5) * 140,
+          y: centroidY + (Math.random() - 0.5) * 60,
+          vy: -(20 + Math.random() * 40),
+          vx: (Math.random() - 0.5) * 14,
+          r: 1 + Math.random() * 2.5,
+          life: 0,
+          maxLife: 1.2 + Math.random() * 1.6
+        });
+      }
+    }
+
+    function updateBrokenParticle(p, dt, nowMs){
+      const elapsed = nowMs - triggerTime;
+      const flyDelay = COMPRESS_MS + p.zoneOrder * ZONE_STEP_MS + Math.random() * 20;
+
+      if(elapsed < COMPRESS_MS){
+        // фаза сжатия к точке удара
+        const t = elapsed / COMPRESS_MS;
+        const pull = 0.15 * t;
+        p.x = p.originX + (centroidX - p.originX) * pull;
+        p.y = p.originY + (centroidY - p.originY) * pull;
+        return;
+      }
+
+      if(!p.flying){
+        if(elapsed < flyDelay){
+          // ждёт своей очереди в волне разрушения (ноги -> таз -> корпус -> руки -> голова)
+          const t = 0.15;
+          p.x = p.originX + (centroidX - p.originX) * t;
+          p.y = p.originY + (centroidY - p.originY) * t;
+          return;
+        }
+        // старт полёта: мягкий импульс от центра удара — растворение, не взрыв
+        p.flying = true;
+        const dx = p.originX - centroidX;
+        const dy = p.originY - centroidY;
+        const dist = Math.max(1, Math.hypot(dx, dy));
+        const dirX = dx / dist, dirY = dy / dist;
+        const speed = (22 + Math.random() * 42) * p.gravityScale + (22 + Math.random() * 42) * 0.3;
+        p.vx = dirX * speed + (Math.random() - 0.5) * 18;
+        p.vy = dirY * speed - (10 + Math.random() * 14); // лёгкий толчок вверх, дальше гравитация
+        p.x = p.originX + (centroidX - p.originX) * 0.15;
+        p.y = p.originY + (centroidY - p.originY) * 0.15;
+        return;
+      }
+
+      // свободная физика в воде: слабая гравитация (с учётом gravityScale) + сопротивление
+      const gravity = 30 * p.gravityScale; // px/s^2, слабая — вода; "плавающие" почти невесомы
+      p.vy += gravity * dt;
+      const drag = Math.pow(p.gravityScale < 1 ? 0.985 : 0.96, Math.max(dt, 0.001) * 60);
+      p.vx *= drag;
+      p.vy *= drag;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+
+      const speedMag = Math.hypot(p.vx, p.vy);
+      if(speedMag < 3){
+        p.settleTimer += dt;
+      } else {
+        p.settleTimer = 0;
+      }
+    }
+
     function draw(time, nowMs, dt){
+      const t_frameStart = DEBUG_MODE ? performance.now() : 0;
+      if(DEBUG_MODE) debugStats.drawnThisFrame = 0;
       ctx.clearRect(0, 0, W, H);
 
-      // Фоновые частицы воды
+      // фоновые частицы воды — независимо от фигуры, скролла, столкновения
+      const t_envStart = DEBUG_MODE ? performance.now() : 0;
+      if(PERF.useBlur) ctx.filter = 'blur(1px)';
       ctx.globalCompositeOperation = 'lighter';
       for(const e of envParticles){
         e.y += e.fall * dt;
         if(e.y > H + 10){ e.y = -10; e.x = Math.random() * W; }
+        const sway = reduceMotion ? 0 : fastSin(time * e.speed + e.phase) * 6;
         ctx.globalAlpha = e.alpha;
-        ctx.fillStyle = 'rgb(180,196,206)';
-        ctx.fillRect(e.x, e.y, e.size, e.size);
+        ctx.fillStyle = e.depth > 0.7 ? 'rgb(180,196,206)' : 'rgb(90,120,140)';
+        ctx.fillRect(e.x + sway - e.size / 2, e.y - e.size / 2, e.size, e.size);
       }
+      ctx.filter = 'none';
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      if(DEBUG_MODE) debugStats.loopEnvMs = performance.now() - t_envStart;
 
       const scale = getScale();
       const anchorX = W / 2;
-      const scrollP = getScrollProgress();
-      const anchorTop = H * 0.35 - scrollP * H * 0.1;
 
-      // Отрисовка частиц фигуры с легким волновым дрейфом
+      if(!hasBroken){
+        const preT = Math.min(maxScrollReached / 0.9, 1);
+        const anchorTop = H * 0.2 - preT * H * 0.06;
+        let fallExtra = 0;
+        if(maxScrollReached > 0.9){
+          const fallT = Math.min((maxScrollReached - 0.9) / 0.1, 1);
+          fallExtra = easeInQuad(fallT) * H * 0.5; // ускоряющееся падение к низу
+        }
+        const finalAnchorTop = anchorTop + fallExtra;
+
+        // "тело замедляется, частицы теряют связь" — плавный рост перед ударом
+        // (без изменения порога срабатывания, только визуальный нарастающий эффект)
+        const preImpactT = Math.max(0, Math.min(1, (maxScrollReached - 0.8) / 0.19));
+
+        // ===== ЗАЛИТЫЙ СИЛУЭТ (база под частицами) =====
+        // Рисуем полигон как пикселизированный силуэт с градиентом —
+        // даёт чёткий узнаваемый контур тела, поверх которого работают частицы.
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 0.6 * (1 - preImpactT * 0.3);
+        ctx.imageSmoothingEnabled = false;
+        const drawW = LW * scale;
+        const drawH = LH * scale;
+        ctx.drawImage(silCanvas,
+          anchorX - drawW / 2, finalAnchorTop - drawH / 2, drawW, drawH);
+        ctx.imageSmoothingEnabled = true;
+        ctx.globalAlpha = 1;
+
+        // аура/дымка — мягкий, неплотный след вокруг тела; частиц немного,
+        // blur здесь недорогой. На слабых устройствах (PERF.useBlur=false) отключаем.
+        const t_auraLoop = DEBUG_MODE ? performance.now() : 0;
+        if(PERF.useBlur) ctx.filter = 'blur(1.4px)';
+        ctx.globalCompositeOperation = 'lighter';
+        for(const a of auraParticles){
+          const wx = reduceMotion ? 0 : fastSin(time * a.speed + a.phase) * a.drift;
+          const wy = reduceMotion ? 0 : fastCos(time * a.speed * 0.7 + a.phase) * a.drift * 0.5;
+          const ax = anchorX + a.lx * scale + wx;
+          const ay = finalAnchorTop + a.ly * scale + wy;
+          const s = a.size * 1.6;
+          ctx.globalAlpha = a.alpha * (1 + preImpactT * 1.8);
+          ctx.fillStyle = a.color;
+          ctx.fillRect(ax - s / 2, ay - s / 2, s, s);
+        }
+        ctx.filter = 'none';
+        if(DEBUG_MODE) debugStats.loopAuraMs = performance.now() - t_auraLoop;
+
+        // основной силуэт — ~2000-4500 частиц. ctx.filter blur здесь стоит
+        // дорого (пересчёт на каждый fillRect), поэтому мягкость даём только
+        // через аддитивное смешение (дёшево) и вариацию альфы/размера.
+        // частицы отсортированы по цветовому бакету — fillStyle меняем только
+        // когда цвет реально отличается от предыдущей частицы
+        const t_mainLoop = DEBUG_MODE ? performance.now() : 0;
+        let lastColor = null;
+        for(let i = 0; i < particles.length; i++){
+          if(renderStride > 1 && (i % renderStride) !== 0) continue;
+          const p = particles[i];
+          // перед ударом часть краевых частиц (trailParticle) начинает
+          // рассинхронизироваться и слегка отставать — "вода забирает часть тела"
+          const desync = p.trailParticle ? preImpactT * 10 : preImpactT * 2;
+          const jx = reduceMotion ? 0 : (fastSin(time * 3 + p.phase) * desync);
+          const jy = reduceMotion ? 0 : (fastCos(time * 2.4 + p.phase) * desync * 0.6 + (p.trailParticle ? preImpactT * 14 : 0));
+          // у края и перед ударом плотность визуально "мерцает" и редеет
+          if(preImpactT > 0 && p.edge > 0.3 && Math.random() < preImpactT * 0.4) continue;
+          const home = currentHome(p, scale, anchorX, finalAnchorTop, time);
+          const s = p.size * 2;
+          const alpha = (0.5 - p.edge * 0.28) * p.densityNoise * (1 - preImpactT * (p.trailParticle ? 0.35 : 0.1));
+          if(alpha <= 0.02) continue;
+          ctx.globalAlpha = alpha;
+          if(p.color !== lastColor){ ctx.fillStyle = p.color; lastColor = p.color; }
+          ctx.fillRect(home.x + jx - s / 2, home.y + jy - s / 2, s, s);
+          if(DEBUG_MODE) debugStats.drawnThisFrame++;
+        }
+        if(DEBUG_MODE) debugStats.loopMainMs = performance.now() - t_mainLoop;
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+
+        // триггер удара строго у конца страницы
+        if(maxScrollReached >= 0.995){
+          triggerBreak(scale, anchorX, finalAnchorTop, time);
+        }
+        return;
+      }
+
+      // ---- сломанное состояние: физика (не тронута); рендер без дорогого blur ----
+      const t_brokenLoop = DEBUG_MODE ? performance.now() : 0;
+      ctx.globalCompositeOperation = 'lighter';
+      let lastColorBroken = null;
       for(let i = 0; i < particles.length; i++){
         const p = particles[i];
-        const wave = fastSin(time * p.speed + p.ly * 0.05) * 4;
-        const x = anchorX + p.lx * scale + wave;
-        const y = anchorTop + p.ly * scale;
+        updateBrokenParticle(p, dt, nowMs);
+        if(renderStride > 1 && (i % renderStride) !== 0) continue;
 
-        ctx.globalAlpha = 0.65;
-        ctx.fillStyle = p.color;
-        ctx.fillRect(x, y, p.size * 2, p.size * 2);
+        let alpha = (0.5 - p.edge * 0.28) * p.densityNoise;
+        if(p.settleTimer > 3){
+          const fadeT = Math.min((p.settleTimer - 3) / 3, 1);
+          alpha *= (1 - fadeT * 0.75);
+        }
+        if(alpha <= 0.02) continue;
+
+        const s = p.size * 2;
+        ctx.globalAlpha = alpha;
+        if(p.color !== lastColorBroken){ ctx.fillStyle = p.color; lastColorBroken = p.color; }
+        ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
+        if(DEBUG_MODE) debugStats.drawnThisFrame++;
       }
       ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
+      ctx.filter = 'none';
+      if(DEBUG_MODE) debugStats.loopBrokenMs = performance.now() - t_brokenLoop;
+
+      // пузырьки
+      for(let i = bubbles.length - 1; i >= 0; i--){
+        const bu = bubbles[i];
+        bu.life += dt;
+        if(bu.life >= bu.maxLife){ bubbles.splice(i, 1); continue; }
+        bu.x += bu.vx * dt + Math.sin(bu.life * 4 + i) * 0.4;
+        bu.y += bu.vy * dt;
+        bu.vy *= 0.995;
+        const lt = bu.life / bu.maxLife;
+        ctx.globalAlpha = (1 - lt) * 0.35;
+        ctx.fillStyle = 'rgba(200,220,230,1)';
+        ctx.beginPath();
+        ctx.arc(bu.x, bu.y, bu.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      if(DEBUG_MODE) debugStats.frameMs = performance.now() - t_frameStart;
     }
 
     resizeCanvas();
-    function frame(now){
-      const dt = Math.min((now - lastT) / 1000, 0.05);
-      lastT = now;
-      draw(now / 1000, now, dt);
-      requestAnimationFrame(frame);
+    let lastT = performance.now();
+
+    // адаптивное качество в рантайме: статический perfTier не ловит троттлинг
+    // браузера, фоновые процессы или "средние" устройства, которые на деле тормозят.
+    // Каждые 1.5с меряем реальный FPS и, если он ниже целевого, прореживаем
+    // отрисовку частиц (renderStride) — сами частицы и физика не трогаются
+    let renderStride = 1;
+    let fpsFrameCount = 0;
+    let fpsWindowStart = performance.now();
+    let qualityChecks = 0;
+    const fpsTarget = (perfTier === 'high' || perfTier === 'mid') ? 48 : 26;
+    function sampleFps(now){
+      fpsFrameCount++;
+      const elapsed = now - fpsWindowStart;
+      if(elapsed > 1500){
+        const fps = fpsFrameCount / (elapsed / 1000);
+        fpsFrameCount = 0;
+        fpsWindowStart = now;
+        debugStats.fps = fps;
+        if(fps < fpsTarget && renderStride < 3 && qualityChecks < 3){
+          renderStride++;
+        }
+        qualityChecks++;
+        if(DEBUG_MODE){
+          console.log(
+            `INIT TIME: ${debugStats.initTime.toFixed(1)}ms\n` +
+            `  build silhouette: ${debugStats.buildSilhouetteTime.toFixed(1)}ms\n` +
+            `  particle create+sort: ${debugStats.particleCreateTime.toFixed(1)}ms\n` +
+            `  aura create: ${debugStats.auraCreateTime.toFixed(1)}ms\n` +
+            `  first frame: ${debugStats.firstFrameTime.toFixed(1)}ms\n` +
+            `PARTICLE COUNT: ${debugStats.particleCount} (drawn this frame: ${debugStats.drawnThisFrame}, renderStride: ${renderStride})\n` +
+            `FPS: ${fps.toFixed(1)} (target ${fpsTarget})\n` +
+            `FRAME TIME: ${debugStats.frameMs.toFixed(2)}ms\n` +
+            `  env loop: ${(debugStats.loopEnvMs||0).toFixed(2)}ms\n` +
+            `  aura loop: ${(debugStats.loopAuraMs||0).toFixed(2)}ms\n` +
+            `  main particle loop (update+render fused): ${(debugStats.loopMainMs||0).toFixed(2)}ms\n` +
+            `  broken loop (update+render fused): ${(debugStats.loopBrokenMs||0).toFixed(2)}ms\n` +
+            `perfTier: ${perfTier}, DPR: ${DPR}, cores: ${cores}`
+          );
+        }
+      }
+      if(debugHud){
+        debugHud.textContent =
+          `girlCanvas debug (?debug=1)\n` +
+          `INIT TIME: ${debugStats.initTime.toFixed(1)}ms\n` +
+          `  build: ${debugStats.buildSilhouetteTime.toFixed(1)}ms  particles: ${debugStats.particleCreateTime.toFixed(1)}ms  aura: ${debugStats.auraCreateTime.toFixed(1)}ms\n` +
+          `  first frame: ${debugStats.firstFrameTime.toFixed(1)}ms\n` +
+          `PARTICLE COUNT: ${debugStats.particleCount} (drawn: ${debugStats.drawnThisFrame}, stride: ${renderStride})\n` +
+          `FPS: ${debugStats.fps.toFixed(1)} / target ${fpsTarget}\n` +
+          `FRAME TIME: ${debugStats.frameMs.toFixed(2)}ms\n` +
+          `  env:${(debugStats.loopEnvMs||0).toFixed(2)} aura:${(debugStats.loopAuraMs||0).toFixed(2)} main:${(debugStats.loopMainMs||0).toFixed(2)} broken:${(debugStats.loopBrokenMs||0).toFixed(2)}\n` +
+          `tier: ${perfTier}  DPR: ${DPR}  cores: ${cores}`;
+      }
     }
-    requestAnimationFrame(frame);
+
+    if(DEBUG_MODE){
+      debugStats.initTime = performance.now() - initStartTime;
+      console.timeEnd('[girlCanvas] INIT TOTAL');
+      console.log(`INIT TIME: ${debugStats.initTime.toFixed(1)}ms | PARTICLE COUNT: ${debugStats.particleCount}`);
+    }
+
+    if(reduceMotion){
+      // без непрерывной анимации: перерисовываем только по скроллу/ресайзу
+      let ticking = false;
+      let firstFrame = true;
+      function renderOnce(){
+        const scrollP = getScrollProgress();
+        if(scrollP > maxScrollReached) maxScrollReached = scrollP;
+        const now = performance.now();
+        if(DEBUG_MODE && firstFrame){
+          const t0 = performance.now();
+          draw(0, now, 0);
+          debugStats.firstFrameTime = performance.now() - t0;
+          firstFrame = false;
+        } else {
+          draw(0, now, 0);
+        }
+        ticking = false;
+      }
+      function requestRender(){
+        if(!ticking){ ticking = true; requestAnimationFrame(renderOnce); }
+      }
+      renderOnce();
+      window.addEventListener('scroll', requestRender, {passive: true});
+      window.addEventListener('resize', ()=>{ debouncedResize(); requestRender(); }, {passive: true});
+    } else {
+      let firstFrame = true;
+      function frame(now){
+        const dt = Math.min((now - lastT) / 1000, 0.05);
+        lastT = now;
+        sampleFps(now);
+        const scrollP = getScrollProgress();
+        if(scrollP > maxScrollReached) maxScrollReached = scrollP;
+        if(DEBUG_MODE && firstFrame){
+          const t0 = performance.now();
+          draw(now / 1000, now, dt);
+          debugStats.firstFrameTime = performance.now() - t0;
+          if(debugHud) sampleFps(now);
+          firstFrame = false;
+        } else {
+          draw(now / 1000, now, dt);
+        }
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+      window.addEventListener('resize', debouncedResize, {passive: true});
+    }
   };
 
+  // отложенный запуск: не блокируем первую отрисовку страницы на слабых
+  // телефонах тяжёлой инициализацией (растеризация силуэта, создание частиц)
   if('requestIdleCallback' in window){
     requestIdleCallback(initGirlCanvas, {timeout: 300});
   } else {
     setTimeout(initGirlCanvas, 60);
   }
 
-  // Пузырьки поднимающиеся
+  // rising bubbles
   const bubbleContainer = document.getElementById('bubbles');
-  for(let i=0; i<20; i++){
+  const bubbleCount = 22;
+  for(let i=0;i<bubbleCount;i++){
     const b = document.createElement('div');
     b.className = 'bubble';
-    const size = 4 + Math.random()*18;
+    const size = 4 + Math.random()*22;
     b.style.width = size+'px';
     b.style.height = size+'px';
     b.style.left = Math.random()*100+'vw';
-    b.style.animationDuration = (10 + Math.random()*12)+'s';
-    b.style.animationDelay = (Math.random()*10)+'s';
+    b.style.animationDuration = (10 + Math.random()*14)+'s';
+    b.style.animationDelay = (Math.random()*14)+'s';
     bubbleContainer.appendChild(b);
   }
 
   // ============ ТОВАРЫ ИЗ GOOGLE ТАБЛИЦЫ ============
+  // Вставь сюда ссылку на опубликованный CSV из Google Таблицы (см. гайд в чате)
   const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTOBTxiZK0_A81YpK5AHOlejgVjULo4y6osFKTb9ZN5Ncct_KDdVk5JU_l1GsI8QeSl8-RWOvd-KE1P/pub?gid=0&single=true&output=csv";
 
+  // запасные товары — показываются, если таблица не подключена или недоступна
   const fallbackItems = [
     {name:'Худи «Бездна»', tag:'верх', price:'6 400 ₽', label:'ХУДИ'},
     {name:'Лонгслив «Пузырь»', tag:'верх', price:'3 900 ₽', label:'ЛОНГ'},
@@ -771,6 +1453,8 @@
     });
     itemCount.textContent = items.length + ' позиций / глубина растёт';
 
+    // scroll reveal — навешиваем заново на новые элементы
+    const revealItems = document.querySelectorAll('.item');
     const observer = new IntersectionObserver((entries)=>{
       entries.forEach(entry=>{
         if(entry.isIntersecting){
@@ -778,60 +1462,547 @@
         }
       });
     },{threshold:0.15});
-
-    document.querySelectorAll('.item').forEach(el => observer.observe(el));
+    revealItems.forEach(el=>observer.observe(el));
   }
 
-  if(window.Papa){
+  function loadItems(){
+    if(!SHEET_CSV_URL){
+      renderItems(fallbackItems);
+      return;
+    }
+    grid.innerHTML = '<div class="loading-row"><div class="loading-dot"></div>Загружаем архив из таблицы...</div>';
+
     Papa.parse(SHEET_CSV_URL, {
       download: true,
       header: true,
-      complete: function(results) {
-        if(results.data && results.data.length > 0){
-          const valid = results.data.filter(item => item.name && item.price);
-          if(valid.length > 0){
-            renderItems(valid);
-            return;
-          }
-        }
-        renderItems(fallbackItems);
+      skipEmptyLines: true,
+      complete: function(results){
+        const rows = results.data
+          .filter(r => r.name && r.name.trim())
+          .map(r => ({
+            name: r.name.trim(),
+            tag: (r.tag || '').trim(),
+            price: (r.price || '').trim(),
+            label: (r.label || r.name).trim()
+          }));
+        renderItems(rows.length ? rows : fallbackItems);
       },
       error: function(){
         renderItems(fallbackItems);
       }
     });
-  } else {
-    renderItems(fallbackItems);
   }
 
-  // Общие эффекты появления (Reveal)
-  const revealObserver = new IntersectionObserver((entries)=>{
-    entries.forEach(entry => {
+  loadItems();
+
+  // плавное появление секций при скролле (manifesto, archive-head, signature)
+  const revealSections = document.querySelectorAll('.reveal');
+  const sectionObserver = new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>{
       if(entry.isIntersecting){
         entry.target.classList.add('visible');
+        sectionObserver.unobserve(entry.target);
       }
     });
-  }, {threshold: 0.1});
+  }, {threshold: 0.2});
+  revealSections.forEach(el => sectionObserver.observe(el));
 
-  document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+  // премиальное микровзаимодействие: лёгкий tilt карточки от положения курсора,
+  // только на устройствах с мышью, делегированный обработчик (без слушателя на каждую карточку)
+  if(window.matchMedia('(pointer: fine)').matches){
+    let tiltTicking = false;
+    let tiltTarget = null, tiltX = 0, tiltY = 0;
+    grid.addEventListener('mousemove', (e)=>{
+      const card = e.target.closest('.item');
+      if(!card){ return; }
+      const rect = card.getBoundingClientRect();
+      tiltTarget = card;
+      tiltX = (e.clientX - rect.left) / rect.width - 0.5;
+      tiltY = (e.clientY - rect.top) / rect.height - 0.5;
+      if(!tiltTicking){
+        tiltTicking = true;
+        requestAnimationFrame(()=>{
+          if(tiltTarget){
+            tiltTarget.classList.add('tilting');
+            tiltTarget.style.setProperty('--ry', `${tiltX * 6}deg`);
+            tiltTarget.style.setProperty('--rx', `${-tiltY * 6}deg`);
+          }
+          tiltTicking = false;
+        });
+      }
+    }, {passive: true});
+    grid.addEventListener('mouseleave', (e)=>{
+      const card = e.target.closest && e.target.closest('.item');
+      document.querySelectorAll('.item.tilting').forEach(el=>{
+        el.style.setProperty('--rx', '0deg');
+        el.style.setProperty('--ry', '0deg');
+        el.classList.remove('tilting');
+      });
+    }, true);
+  }
 
-  // Кнопка шеринга
+  // подготовка структуры под звук (без самого звука и автовоспроизведения):
+  // единая точка входа, чтобы в будущем подключить подводный фон и тихие эффекты
+  const SoundEngine = {
+    ready: false,
+    enabled: false,
+    // enable() должен вызываться только по явному действию пользователя (клик),
+    // автозапуск звука не предусмотрен и не будет добавлен
+    enable(){ this.enabled = true; },
+    playAmbient(){ /* будущий подводный эмбиент, пока не подключён */ },
+    playEffect(name){ /* будущие тихие эффекты (импакт, пузырь), пока не подключены */ }
+  };
+  window.ANOXIA_SOUND = SoundEngine;
+
+  // лёгкий hero-параллакс: только transform, throttled через rAF,
+  // отключается при prefers-reduced-motion
+  (function(){
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(reduceMotion) return;
+    const heroEl = document.querySelector('.hero');
+    const depthLines = document.querySelector('.depth-lines');
+    const heroH1 = document.querySelector('.hero h1');
+    const heroTagline = document.querySelector('.hero .tagline');
+    const oxygenMeter = document.querySelector('.oxygen-meter');
+    const heroInner = document.querySelector('.hero');
+    if(!heroEl) return;
+
+    let mouseX = 0, mouseY = 0, ticking = false;
+    const hasFinePointer = window.matchMedia('(pointer: fine)').matches;
+
+    function applyParallax(){
+      const scrollY = window.scrollY || 0;
+      // параллакс от скролла — работает на всех устройствах
+      const scrollT = Math.min(scrollY / window.innerHeight, 1);
+      // "ощущение камеры": лёгкий zoom-out контента при уходе с первого экрана,
+      // будто камера отплывает назад, а не просто скроллится страница
+      const camScale = 1 + scrollT * 0.06;
+      if(heroH1) heroH1.style.transform = `translateY(${scrollT * -18}px) scale(${camScale})`;
+      if(depthLines) depthLines.style.transform = `translateY(${scrollT * 40}px) scale(${1 + scrollT * 0.03})`;
+      if(oxygenMeter) oxygenMeter.style.transform = `translateY(${scrollT * 14}px)`;
+      // лёгкое смещение от курсора — только на устройствах с мышью
+      if(hasFinePointer && scrollT < 1){
+        const dx = (mouseX - 0.5) * 10;
+        const dy = (mouseY - 0.5) * 8;
+        if(heroTagline) heroTagline.style.transform = `translate(${dx * 0.6}px, ${dy * 0.6}px)`;
+        if(depthLines) depthLines.style.transform += ` translateX(${dx}px)`;
+      }
+      ticking = false;
+    }
+    function requestParallax(){
+      if(!ticking){ ticking = true; requestAnimationFrame(applyParallax); }
+    }
+    window.addEventListener('scroll', requestParallax, {passive: true});
+    if(hasFinePointer){
+      heroEl.addEventListener('mousemove', (e)=>{
+        mouseX = e.clientX / window.innerWidth;
+        mouseY = e.clientY / window.innerHeight;
+        requestParallax();
+      }, {passive: true});
+    }
+    applyParallax();
+  })();
+
+  // share button
   const shareBtn = document.getElementById('shareBtn');
   const shareToast = document.getElementById('shareToast');
-  shareBtn.addEventListener('click', ()=>{
-    navigator.clipboard.writeText(window.location.href);
+
+  function showToast(text){
+    shareToast.textContent = text;
     shareToast.classList.add('show');
-    setTimeout(()=> shareToast.classList.remove('show'), 2000);
+    setTimeout(()=> shareToast.classList.remove('show'), 2200);
+  }
+
+  shareBtn.addEventListener('click', async ()=>{
+    const shareData = {
+      title: 'ANOXIA',
+      text: 'ANOXIA — культ утопленников. Вещи для тех, кто живёт на глубине.',
+      url: window.location.href
+    };
+    if(navigator.share){
+      try{
+        await navigator.share(shareData);
+      }catch(err){
+        // пользователь отменил — ничего не делаем
+      }
+    } else {
+      try{
+        await navigator.clipboard.writeText(shareData.url);
+        showToast('Ссылка скопирована');
+      }catch(err){
+        showToast('Не удалось скопировать');
+      }
+    }
   });
 
-  // Подписка / Кольцо
+  // кольцо подписки — "пульс останавливается" + переход в Telegram
   const subscribeRing = document.getElementById('subscribeRing');
   const breathFlash = document.getElementById('breathFlash');
+  const TELEGRAM_URL = 'https://t.me/xxzffyw';
+  let ringBusy = false;
+
+  const PULSE_DURATION = 900;   // учащающийся пульс
+  const FREEZE_DURATION = 350;  // полная тишина после пульса
+  const BURST_DURATION = 600;   // вспышка перед переходом
+
   subscribeRing.addEventListener('click', ()=>{
-    breathFlash.classList.add('burst');
-    setTimeout(()=> breathFlash.classList.remove('burst'), 600);
-    alert('Вы зафиксированы на глубине. Ожидайте закрытый дроп.');
+    if(ringBusy) return;
+    ringBusy = true;
+
+    // 1. учащающийся пульс
+    subscribeRing.classList.add('pulse');
+
+    setTimeout(()=>{
+      // 2. пульс снят, наступает полная заморозка (тишина)
+      subscribeRing.classList.remove('pulse');
+      subscribeRing.classList.add('frozen');
+
+      setTimeout(()=>{
+        // 3. заморозка снята, вспышка + переход
+        subscribeRing.classList.remove('frozen');
+        subscribeRing.classList.add('burst');
+        breathFlash.classList.add('burst');
+
+        setTimeout(()=>{
+          window.open(TELEGRAM_URL, '_blank', 'noopener');
+          subscribeRing.classList.remove('burst');
+          breathFlash.classList.remove('burst');
+          ringBusy = false;
+        }, BURST_DURATION);
+
+      }, FREEZE_DURATION);
+
+    }, PULSE_DURATION);
   });
 </script>
-</body>
+
+<script data-pplx-inline-edit>
+(function () {
+  if (window === window.top) return;
+
+  const allowedParentOrigins = ["https://www.perplexity.ai","https://perplexity.ai","https://testing.perplexity.ai","https://staging.perplexity.ai","https://*.preview.i.perplexity.ai","http://perplexity.localhost","http://localhost:1420","http://127.0.0.1:1420","http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173","http://127.0.0.1:5173"];
+  const MAX_FONT_BYTES = 500 * 1024;
+  const MAX_TOTAL_FONT_BYTES = 2 * 1024 * 1024;
+  let scrollForwarding = false;
+  let scrollRaf = 0;
+  let trustedTopOrigin = null;
+
+  // Allow entries like "https://*.preview.i.perplexity.ai" — the wildcard
+  // matches a single DNS label (no dots), so "https://*.foo" cannot stretch
+  // across multiple labels.
+  function matchesAllowedOrigin(origin) {
+    if (!origin) return false;
+    for (const entry of allowedParentOrigins) {
+      if (!entry.includes("*")) {
+        if (entry === origin) return true;
+        continue;
+      }
+      const pattern = new RegExp(
+        "^" +
+          entry.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^.]+") +
+          "$",
+      );
+      if (pattern.test(origin)) return true;
+    }
+    return false;
+  }
+
+  // Trust decision: when the sender is same-origin-visible (event.origin is a
+  // real origin like https://www.perplexity.ai) we trust event.origin directly.
+  // When event.origin is "null" (opaque broker srcdoc), we fall back to the
+  // broker's stamped `parentOrigin` to identify the top window. The fallback
+  // is claim-only — we rely on the browser's native `targetOrigin` enforcement
+  // on the response path (see postToTrustedTop) to ensure replies can't be
+  // delivered to anyone but the actual top window of that claimed origin.
+  function getTrustedParentOrigin(event) {
+    const forwardedParentOrigin =
+      typeof event.data.parentOrigin === "string" ? event.data.parentOrigin : null;
+    const parentOrigin = event.origin === "null" ? forwardedParentOrigin : event.origin;
+    return matchesAllowedOrigin(parentOrigin) ? parentOrigin : null;
+  }
+
+  // All responses go to window.top with targetOrigin = the allowlisted origin.
+  // An attacker that iframes us inside their own null-origin broker can claim
+  // any parentOrigin they like, but the browser will drop the reply whenever
+  // the real top's origin doesn't match — so the screenshot never leaves.
+  function postToTrustedTop(message) {
+    if (!trustedTopOrigin) return;
+    try {
+      window.top.postMessage(message, trustedTopOrigin);
+    } catch (_error) {}
+  }
+
+  function inlineAll(original, clone) {
+    if (original.nodeType !== 1 || clone.nodeType !== 1) return;
+
+    try {
+      const computedStyle = getComputedStyle(original);
+      // cssText on a computed style is the serialized declaration in modern
+      // Chromium/Safari — a single read beats enumerating ~400 longhand
+      // properties. Firefox returns "" here, so we fall back on empty.
+      const serialized = computedStyle.cssText;
+      if (serialized) {
+        clone.style.cssText = serialized;
+      } else {
+        const parts = new Array(computedStyle.length);
+        for (let index = 0; index < computedStyle.length; index += 1) {
+          const property = computedStyle[index];
+          parts[index] = `${property}:${computedStyle.getPropertyValue(property)};`;
+        }
+        clone.style.cssText = parts.join("");
+      }
+    } catch (_error) {}
+
+    const originalChildren = original.children;
+    const clonedChildren = clone.children;
+    for (
+      let index = 0;
+      index < originalChildren.length && index < clonedChildren.length;
+      index += 1
+    ) {
+      inlineAll(originalChildren[index], clonedChildren[index]);
+    }
+  }
+
+  function extractFontUrl(srcValue) {
+    const matches = [
+      ...srcValue.matchAll(
+        /url\(["']?([^"')]+)["']?\)(?:\s*format\(["']?([^"')]+)["']?\))?/gi,
+      ),
+    ];
+    if (matches.length === 0) return null;
+    const woff2 = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff2"));
+    if (woff2) return woff2[1];
+    const woff = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff"));
+    if (woff) return woff[1];
+    return matches[0][1];
+  }
+
+  // Cache resolved font URL -> data URI across captures. Fonts on a page
+  // essentially never change, and a batch run emits multiple captures back to
+  // back — without this we'd refetch + re-base64 every time.
+  const fontDataUriCache = new Map();
+  const SRC_DECLARATION_RE = /src\s*:\s*[^;}]+/i;
+
+  async function fetchAsDataUri(url) {
+    if (fontDataUriCache.has(url)) return fontDataUriCache.get(url);
+    let dataUri = null;
+    try {
+      const response = await fetch(url, { mode: "cors", credentials: "omit" });
+      if (response.ok) {
+        const blob = await response.blob();
+        if (blob.size <= MAX_FONT_BYTES) {
+          dataUri = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () =>
+              resolve(typeof reader.result === "string" ? reader.result : null);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        }
+      }
+    } catch (_error) {
+      dataUri = null;
+    }
+    fontDataUriCache.set(url, dataUri);
+    return dataUri;
+  }
+
+  function collectFontFaceRuleTexts() {
+    const rules = [];
+    for (const sheet of document.styleSheets) {
+      let cssRules;
+      try {
+        cssRules = sheet.cssRules;
+      } catch (_error) {
+        continue;
+      }
+      if (!cssRules) continue;
+      for (const rule of cssRules) {
+        const cssText = rule.cssText || "";
+        if (cssText.startsWith("@font-face")) rules.push(cssText);
+      }
+    }
+    return rules;
+  }
+
+  async function buildInlinedFontCss() {
+    const ruleTexts = collectFontFaceRuleTexts();
+    if (ruleTexts.length === 0) return null;
+
+    const resolved = ruleTexts.map((cssText) => {
+      if (!SRC_DECLARATION_RE.test(cssText)) return null;
+      const srcMatch = cssText.match(/src\s*:\s*([^;}]+)[;}]/i);
+      if (!srcMatch) return null;
+      const url = extractFontUrl(srcMatch[1]);
+      if (!url) return null;
+      try {
+        return { cssText, url: new URL(url, document.baseURI).href };
+      } catch (_error) {
+        return null;
+      }
+    });
+
+    const dataUris = await Promise.all(
+      resolved.map((entry) => (entry ? fetchAsDataUri(entry.url) : Promise.resolve(null))),
+    );
+
+    const inlined = [];
+    let totalBytes = 0;
+    for (let index = 0; index < resolved.length; index += 1) {
+      const entry = resolved[index];
+      const dataUri = dataUris[index];
+      if (!entry || !dataUri) continue;
+      const approxBytes = dataUri.length * 0.75;
+      if (totalBytes + approxBytes > MAX_TOTAL_FONT_BYTES) break;
+      totalBytes += approxBytes;
+      inlined.push(entry.cssText.replace(SRC_DECLARATION_RE, `src: url("${dataUri}")`));
+    }
+    return inlined.length > 0 ? inlined.join("\n") : null;
+  }
+
+  function stripExternal(clone) {
+    const images = clone.querySelectorAll("img");
+    for (let index = 0; index < images.length; index += 1) {
+      const src = images[index].getAttribute("src");
+      if (src && !src.startsWith("data:")) images[index].removeAttribute("src");
+    }
+
+    const elements = clone.querySelectorAll("*");
+    for (let index = 0; index < elements.length; index += 1) {
+      const style = elements[index].style.cssText;
+      if (style && style.includes("url(")) {
+        elements[index].style.cssText = style.replace(
+          /url\(["']?(?!data:)[^)"']*["']?\)/gi,
+          "none",
+        );
+      }
+    }
+  }
+
+  function emitScroll() {
+    scrollRaf = 0;
+    if (!scrollForwarding) return;
+    postToTrustedTop({
+      type: "INLINE_EDIT_SCROLL",
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+    });
+  }
+
+  window.addEventListener(
+    "scroll",
+    function () {
+      if (!scrollForwarding || scrollRaf) return;
+      scrollRaf = requestAnimationFrame(emitScroll);
+    },
+    { passive: true, capture: true },
+  );
+
+  async function handleCaptureRequest(event) {
+    const requestId = event.data.requestId;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    function postResult(dataUrl) {
+      postToTrustedTop({
+        type: "INLINE_EDIT_SCREENSHOT_RESULT",
+        requestId,
+        dataUrl,
+        scrollX,
+        scrollY,
+      });
+    }
+
+    try {
+      // Wait for any pending web fonts to resolve so both inline metrics and
+      // the @font-face inlining below see the same loaded faces.
+      if (document.fonts && document.fonts.ready) {
+        try {
+          await document.fonts.ready;
+        } catch (_error) {}
+      }
+
+      const clone = document.documentElement.cloneNode(true);
+      inlineAll(document.documentElement, clone);
+
+      const removedNodes = clone.querySelectorAll("script,link[rel=\"stylesheet\"],style");
+      for (let index = 0; index < removedNodes.length; index += 1) {
+        removedNodes[index].remove();
+      }
+
+      stripExternal(clone);
+
+      // Re-embed web fonts as data-URI @font-face rules so the SVG rasterizer
+      // can resolve them — external font URLs aren't fetched during
+      // foreignObject rendering, which would otherwise force a fallback face
+      // and change text metrics.
+      const inlinedFontCss = await buildInlinedFontCss();
+      if (inlinedFontCss) {
+        const styleEl = document.createElement("style");
+        styleEl.textContent = inlinedFontCss;
+        const head = clone.querySelector("head");
+        if (head) head.appendChild(styleEl);
+        else clone.insertBefore(styleEl, clone.firstChild);
+      }
+
+      const html = new XMLSerializer().serializeToString(clone);
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+        '<foreignObject width="100%" height="100%">' +
+        `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden">` +
+        `<div style="position:relative;left:-${scrollX}px;top:-${scrollY}px">` +
+        html +
+        "</div></div></foreignObject></svg>";
+      const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      const image = new Image();
+      image.onload = function () {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(image, 0, 0);
+        postResult(canvas.toDataURL("image/png"));
+      };
+      image.onerror = function () {
+        postResult(null);
+      };
+      image.src = svgUrl;
+    } catch (_error) {
+      postResult(null);
+    }
+  }
+
+  window.addEventListener("message", function (event) {
+    if (!event.data) return;
+    // Only accept messages from the direct parent frame. Blocks sibling /
+    // unrelated-window postMessage senders that could otherwise reach us.
+    if (event.source !== window.parent) return;
+
+    const trustedParentOrigin = getTrustedParentOrigin(event);
+    if (!trustedParentOrigin) return;
+    trustedTopOrigin = trustedParentOrigin;
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_START") {
+      scrollForwarding = true;
+      emitScroll();
+      return;
+    }
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_STOP") {
+      scrollForwarding = false;
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
+      scrollRaf = 0;
+      return;
+    }
+
+    if (event.data.type !== "INLINE_EDIT_CAPTURE_REQUEST") return;
+
+    handleCaptureRequest(event);
+  });
+})();
+
+
+</script></body>
 </html>
