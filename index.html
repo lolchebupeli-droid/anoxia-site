@@ -48,7 +48,7 @@
     mix-blend-mode:overlay;
   }
 
-  /* falling silhouette canvas */
+  /* тонущая фигура из пикселей — фон за текстом */
   .girl-canvas{
     position:fixed;
     inset:0;
@@ -107,6 +107,7 @@
   .hero .depth-lines{
     position:absolute;inset:0;z-index:0;opacity:0.25;
     background-image:repeating-linear-gradient(180deg, transparent 0 78px, rgba(58,124,165,0.4) 78px 79px);
+    will-change:transform;
   }
 
   .hero .light-rays{
@@ -118,11 +119,23 @@
     opacity:0.5;
     mix-blend-mode:screen;
     animation:rays-drift 22s ease-in-out infinite alternate;
+    will-change:transform;
   }
   @keyframes rays-drift{
     0%{transform:translateX(-2%) rotate(0deg);}
     100%{transform:translateX(2%) rotate(0.6deg);}
   }
+
+  .hero h1, .hero .tagline, .oxygen-meter{
+    will-change:transform;
+  }
+
+  .reveal{
+    opacity:0;
+    transform:translateY(36px);
+    transition:opacity 0.9s cubic-bezier(.2,.7,.2,1), transform 0.9s cubic-bezier(.2,.7,.2,1);
+  }
+  .reveal.visible{opacity:1;transform:translateY(0);}
 
   .oxygen-meter{
     position:absolute;top:100px;
@@ -205,6 +218,7 @@
     line-height:1.15;
     font-weight:500;
     color:var(--pale);
+    transition:opacity 0.9s cubic-bezier(.2,.7,.2,1) 0.05s, transform 0.9s cubic-bezier(.2,.7,.2,1) 0.05s;
   }
   .manifesto h2 em{
     font-style:normal;
@@ -216,7 +230,13 @@
     line-height:1.9;
     color:var(--foam);
     max-width:640px;
+    opacity:0;
+    transform:translateY(20px);
+    transition:opacity 0.8s cubic-bezier(.2,.7,.2,1), transform 0.8s cubic-bezier(.2,.7,.2,1);
   }
+  .manifesto p:nth-of-type(1){transition-delay:0.15s;}
+  .manifesto p:nth-of-type(2){transition-delay:0.3s;}
+  .manifesto.visible p{opacity:1;transform:translateY(0);}
 
   /* ============ GRID / POSTS (ITEMS) ============ */
   .archive{
@@ -235,20 +255,6 @@
   .archive-head h2{font-size:clamp(28px,4vw,48px);}
   .archive-head .count{font-size:12px;color:var(--foam);letter-spacing:0.1em;}
 
-  .loading-row{
-    padding:40px 0;
-    font-size:12px;
-    color:var(--foam);
-    letter-spacing:0.15em;
-    display:flex;align-items:center;gap:12px;
-  }
-  .loading-dot{
-    width:6px;height:6px;border-radius:50%;
-    background:var(--signal-blue);
-    animation:blink 1s ease-in-out infinite;
-  }
-  @keyframes blink{0%,100%{opacity:0.2;}50%{opacity:1;}}
-
   .grid{
     display:grid;
     grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
@@ -264,7 +270,10 @@
     transform:translateY(40px);
     transition:opacity 0.8s ease, transform 0.8s ease;
   }
-  .item.visible{opacity:1;transform:translateY(0);}
+  .item.visible{
+    opacity:1;
+    transform:translateY(0);
+  }
 
   .item .thumb{
     aspect-ratio:3/4;
@@ -307,68 +316,12 @@
   .item .info .tag{font-size:11px;color:var(--signal-blue);}
   .item .info .price{font-size:12px;color:var(--foam);}
 
-  /* ============ STATS ============ */
-  .stats{
-    padding:0 5vw 140px;
-    position:relative;
-    z-index:2;
-  }
-  .stats-grid{
-    display:grid;
-    grid-template-columns:repeat(3, 1fr);
-    gap:1px;
-    background:rgba(233,237,240,0.08);
-    border-top:1px solid rgba(233,237,240,0.1);
-    border-bottom:1px solid rgba(233,237,240,0.1);
-  }
-  .stat{
-    background:var(--abyss);
-    padding:48px 24px;
-    text-align:center;
-  }
-  .stat .stat-number{
-    font-family:'Oswald',sans-serif;
-    font-weight:600;
-    font-size:clamp(40px, 6vw, 72px);
-    line-height:1;
-    letter-spacing:-0.02em;
-    color:var(--pale);
-    background:linear-gradient(180deg, var(--pale) 30%, var(--signal-blue) 100%);
-    -webkit-background-clip:text;
-    background-clip:text;
-    color:transparent;
-  }
-  .stat .stat-label{
-    margin-top:12px;
-    font-size:11px;
-    letter-spacing:0.15em;
-    text-transform:uppercase;
-    color:var(--foam);
-  }
-  @media (max-width:640px){
-    .stats-grid{grid-template-columns:1fr;}
-    .stat{padding:32px 24px;}
-  }
-
-  /* ============ SIGNATURE ============ */
+  /* ============ SOUND / MOTION SIGNATURE ============ */
   .signature{
     padding:160px 5vw;
     text-align:center;
     position:relative;
     background:linear-gradient(180deg, var(--abyss), var(--ink) 50%, var(--abyss));
-    overflow:hidden;
-  }
-  .particle-sphere{
-    position:absolute;
-    top:50%;left:50%;
-    transform:translate(-50%,-50%);
-    z-index:0;
-    opacity:0.55;
-    pointer-events:none;
-  }
-  .signature > *:not(.particle-sphere){
-    position:relative;
-    z-index:2;
   }
   .signature h2{
     font-size:clamp(40px,7vw,90px);
@@ -407,53 +360,12 @@
   }
   .ring span{font-size:10px;letter-spacing:0.2em;color:var(--foam);position:relative;z-index:2;}
 
-  .ring.pulse{animation:pulse-accelerate 0.9s ease-in-out forwards;}
-  @keyframes pulse-accelerate{
-    0%{transform:scale(1);}
-    8%{transform:scale(1.07);}
-    16%{transform:scale(1);}
-    30%{transform:scale(1.07);}
-    38%{transform:scale(1);}
-    48%{transform:scale(1.09);}
-    54%{transform:scale(1);}
-    62%{transform:scale(1.09);}
-    67%{transform:scale(1);}
-    73%{transform:scale(1.11);}
-    77%{transform:scale(1);}
-    82%{transform:scale(1.11);}
-    85%{transform:scale(1);}
-    100%{transform:scale(1);}
-  }
-  .ring.frozen{
-    animation:none !important;
-    transition:none !important;
-    transform:scale(1) !important;
-  }
-  .ring.frozen::before,
-  .ring.frozen::after{
-    animation-play-state:paused;
-  }
-
-  .ring.burst{animation:ring-burst 0.6s ease-out forwards;}
-  @keyframes ring-burst{
-    0%{transform:scale(1);}
-    30%{transform:scale(0.92);}
-    100%{transform:scale(2.4);opacity:0;}
-  }
   .breath-flash{
     position:absolute;inset:0;
     border-radius:50%;
     background:radial-gradient(circle, rgba(95,168,211,0.9) 0%, rgba(95,168,211,0) 70%);
     opacity:0;
     pointer-events:none;
-  }
-  .breath-flash.burst{
-    animation:flash-burst 0.6s ease-out forwards;
-  }
-  @keyframes flash-burst{
-    0%{opacity:0;transform:scale(0.8);}
-    40%{opacity:1;transform:scale(1.6);}
-    100%{opacity:0;transform:scale(2.8);}
   }
 
   /* ============ FOOTER ============ */
@@ -478,10 +390,6 @@
     color:var(--foam);
     font-size:11px;
     letter-spacing:0.05em;
-  }
-
-  @media (prefers-reduced-motion: reduce){
-    *{animation:none !important;transition:none !important;}
   }
 
   @media (max-width:640px){
@@ -530,11 +438,6 @@
     z-index:200;
   }
   .toast.show{opacity:1;transform:translateY(0);}
-
-  @media (max-width:640px){
-    .share-btn{right:6vw;bottom:20px;padding:12px 18px;font-size:10px;}
-    .toast{right:6vw;bottom:78px;}
-  }
 </style>
 </head>
 <body>
@@ -583,7 +486,7 @@
   </div>
 </section>
 
-<section class="manifesto" id="manifesto">
+<section class="manifesto reveal" id="manifesto">
   <span class="eyebrow">О бренде</span>
   <h2>Anoxia — это состояние, когда <em>воздуха больше нет</em>, а тело ещё не сдалось.</h2>
   <p>
@@ -597,25 +500,8 @@
   </p>
 </section>
 
-<section class="stats">
-  <div class="stats-grid">
-    <div class="stat">
-      <div class="stat-number" id="statItems">—</div>
-      <div class="stat-label">Вещей в архиве</div>
-    </div>
-    <div class="stat">
-      <div class="stat-number">0%</div>
-      <div class="stat-label">Кислорода</div>
-    </div>
-    <div class="stat">
-      <div class="stat-number">∞</div>
-      <div class="stat-label">Глубина</div>
-    </div>
-  </div>
-</section>
-
 <section class="archive" id="archive">
-  <div class="archive-head">
+  <div class="archive-head reveal">
     <h2>Архив вещей</h2>
     <span class="count" id="itemCount">загрузка...</span>
   </div>
@@ -625,8 +511,7 @@
   </div>
 </section>
 
-<section class="signature" id="signature">
-  <canvas class="particle-sphere" id="particleSphere"></canvas>
+<section class="signature reveal" id="signature">
   <span class="eyebrow">Дыши в ритме бренда</span>
   <h2>Задержи<br>дыхание</h2>
   <p>Подпишись на архив — новые вещи публикуются без анонса, партиями по 6, и не переиздаются.</p>
@@ -645,7 +530,7 @@
   <div class="col">
     <h3>Связь</h3>
     <a href="https://t.me/xxzffyw" target="_blank" rel="noopener">Telegram</a>
-    <a href="https://www.instagram.com/anoxia_studio?igsh=Z2czZWJud2t0YXBx" target="_blank" rel="noopener">Instagram</a>
+    <a href="https://www.instagram.com/ledkov.aa?igsh=MXVxams1bGptdG5ueQ==" target="_blank" rel="noopener">Instagram</a>
     <a href="https://www.tiktok.com/@anoxiaa.a?_r=1&_t=ZS-98QH8CLe73l" target="_blank" rel="noopener">TikTok</a>
     <a href="#">Почта</a>
   </div>
@@ -660,28 +545,38 @@
 </footer>
 
 <script>
-  // rising bubbles
-  const bubbleContainer = document.getElementById('bubbles');
-  const bubbleCount = 22;
-  for(let i=0;i<bubbleCount;i++){
-    const b = document.createElement('div');
-    b.className = 'bubble';
-    const size = 4 + Math.random()*22;
-    b.style.width = size+'px';
-    b.style.height = size+'px';
-    b.style.left = Math.random()*100+'vw';
-    b.style.animationDuration = (10 + Math.random()*14)+'s';
-    b.style.animationDelay = (Math.random()*14)+'s';
-    bubbleContainer.appendChild(b);
-  }
-
-  // ============ ПАДАЮЩИЙ СИЛУЭТ (СВЕДЕННЫЙ ЕДИНЫЙ ОБЪЕКТ) ============
+  // ============ ТОНУЩАЯ ФИГУРА ИЗ ПИКСЕЛЕЙ (ПОЛНЫЙ СИЛУЭТ С НОГАМИ) ============
   const initGirlCanvas = function(){
     const canvas = document.getElementById('girlCanvas');
     const ctx = canvas.getContext('2d');
-    
-    let W = window.innerWidth, H = window.innerHeight, DPR = Math.min(window.devicePixelRatio || 1, 2);
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const PERF = {dprCap: 1.5, particleTarget: 4500, envDensity: 0.06, useBlur: true};
+
+    // LUT для тригонометрии
+    const LUT_SIZE = 2048;
+    const LUT_SCALE = LUT_SIZE / (Math.PI * 2);
+    const SIN_LUT = new Float32Array(LUT_SIZE);
+    const COS_LUT = new Float32Array(LUT_SIZE);
+    for(let i = 0; i < LUT_SIZE; i++){
+      const a = (i / LUT_SIZE) * Math.PI * 2;
+      SIN_LUT[i] = Math.sin(a);
+      COS_LUT[i] = Math.cos(a);
+    }
+    function fastSin(x){
+      let idx = (x * LUT_SCALE) | 0;
+      idx = ((idx % LUT_SIZE) + LUT_SIZE) % LUT_SIZE;
+      return SIN_LUT[idx];
+    }
+    function fastCos(x){
+      let idx = (x * LUT_SCALE) | 0;
+      idx = ((idx % LUT_SIZE) + LUT_SIZE) % LUT_SIZE;
+      return COS_LUT[idx];
+    }
+
+    let W = 0, H = 0, DPR = 1;
     function resizeCanvas(){
+      DPR = Math.min(window.devicePixelRatio || 1, PERF.dprCap);
       W = window.innerWidth;
       H = window.innerHeight;
       canvas.width = Math.round(W * DPR);
@@ -689,76 +584,156 @@
       canvas.style.width = W + 'px';
       canvas.style.height = H + 'px';
       ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      buildEnvParticles();
     }
-    resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const LW = 100, LH = 140;
+    let envParticles = [];
+    function buildEnvParticles(){
+      const n = Math.round(window.innerWidth * PERF.envDensity);
+      envParticles = [];
+      for(let i = 0; i < n; i++){
+        envParticles.push({
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+          size: 0.8 + Math.random() * 1.5,
+          alpha: 0.04 + Math.random() * 0.06,
+          speed: 0.05 + Math.random() * 0.08,
+          fall: 2 + Math.random() * 5
+        });
+      }
+    }
+
+    // Геометрия тела: горизонтальная фигура (голова справа, ноги слева со стопами)
+    const LW = 480, LH = 240;
+    const SIL_W = 200, SIL_H = 100;
     const silCanvas = document.createElement('canvas');
-    silCanvas.width = LW;
-    silCanvas.height = LH;
+    silCanvas.width = SIL_W;
+    silCanvas.height = SIL_H;
     const silCtx = silCanvas.getContext('2d');
 
-    silCtx.fillStyle = '#ffffff';
-    silCtx.beginPath();
-    // Голова
-    silCtx.arc(50, 22, 10, 0, Math.PI * 2);
-    // Торс и плечи
-    silCtx.rect(38, 34, 24, 45);
-    // Руки
-    silCtx.rect(24, 36, 12, 40);
-    silCtx.rect(64, 36, 12, 40);
-    // Ноги
-    silCtx.rect(40, 79, 9, 45);
-    silCtx.rect(51, 79, 9, 45);
-    silCtx.fill();
+    // Процедурная отрисовка силуэта девушки с ногами и руками на вспомогательный канвас
+    {
+      silCtx.fillStyle = '#b7c4cc';
+      silCtx.beginPath();
+      // Голова
+      silCtx.ellipse(150, 50, 22, 16, 0, 0, Math.PI * 2);
+      // Шея и корпус (горизонтально)
+      silCtx.roundRect(80, 42, 50, 18, 6);
+      // Бёдра и ноги (протянуты влево со стопами)
+      silCtx.roundRect(20, 40, 62, 16, 8);
+      // Руки (подняты кверху)
+      silCtx.roundRect(100, 22, 28, 12, 4);
+      silCtx.fill();
+    }
 
-    const imgData = silCtx.getImageData(0, 0, LW, LH).data;
-    const pts = [];
-    for(let y = 0; y < LH; y++){
-      for(let x = 0; x < LW; x++){
-        if(imgData[(y * LW + x) * 4 + 3] > 128){
-          pts.push({x: x - LW / 2, y: y - LH / 2});
+    function buildSilhouettePoints(){
+      const off = document.createElement('canvas');
+      off.width = LW; off.height = LH;
+      const octx = off.getContext('2d');
+      octx.imageSmoothingEnabled = false;
+      octx.drawImage(silCanvas, 0, 0, LW, LH);
+
+      const img = octx.getImageData(0, 0, LW, LH).data;
+      const pts = [];
+      for(let y = 0; y < LH; y+=2){
+        for(let x = 0; x < LW; x+=2){
+          if(img[(y * LW + x) * 4 + 3] > 100){
+            pts.push({x: x - LW / 2, y: y - LH / 2});
+          }
         }
       }
+      return pts;
     }
 
-    const particles = pts.map(p => ({
-      lx: p.x, ly: p.y,
-      speed: 0.2 + Math.random() * 0.3,
-      phase: Math.random() * Math.PI * 2,
-      size: 1.2 + Math.random() * 1.2,
-      color: Math.random() > 0.3 ? '#e9edf0' : '#3a7ca5'
-    }));
+    const basePoints = buildSilhouettePoints();
+    const palette = [[228, 232, 236], [165, 172, 180], [68, 76, 88], [5, 10, 16]];
+
+    const particles = basePoints.map(p => {
+      const t = (p.y + LH / 2) / LH;
+      return {
+        lx: p.x, ly: p.y,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.2 + Math.random() * 0.3,
+        size: 1 + Math.random() * 1.5,
+        color: `rgb(${palette[Math.floor(t * 3)][0]},${palette[Math.floor(t * 3)][1]},${palette[Math.floor(t * 3)][2]})`
+      };
+    });
+
+    function getScale(){
+      return Math.min(window.innerWidth * 0.75, 720) / LW;
+    }
+
+    function getScrollProgress(){
+      const doc = document.documentElement;
+      const scrollTop = window.scrollY || doc.scrollTop || 0;
+      const max = doc.scrollHeight - window.innerHeight;
+      return max <= 0 ? 0 : Math.min(Math.max(scrollTop / max, 0), 1);
+    }
 
     let lastT = performance.now();
-    function loop(now){
-      const dt = (now - lastT) / 1000;
-      lastT = now;
+    function draw(time, nowMs, dt){
       ctx.clearRect(0, 0, W, H);
 
-      const scale = Math.min(W * 0.3, 180) / LW;
-      const anchorX = W / 2;
-      const anchorTop = H * 0.12;
+      // Фоновые частицы воды
+      ctx.globalCompositeOperation = 'lighter';
+      for(const e of envParticles){
+        e.y += e.fall * dt;
+        if(e.y > H + 10){ e.y = -10; e.x = Math.random() * W; }
+        ctx.globalAlpha = e.alpha;
+        ctx.fillStyle = 'rgb(180,196,206)';
+        ctx.fillRect(e.x, e.y, e.size, e.size);
+      }
 
-      const time = now / 1000;
+      const scale = getScale();
+      const anchorX = W / 2;
+      const scrollP = getScrollProgress();
+      const anchorTop = H * 0.35 - scrollP * H * 0.1;
+
+      // Отрисовка частиц фигуры с легким волновым дрейфом
       for(let i = 0; i < particles.length; i++){
         const p = particles[i];
-        const wx = Math.sin(time * p.speed + p.phase) * 3;
-        const wy = Math.cos(time * p.speed) * 2;
+        const wave = fastSin(time * p.speed + p.ly * 0.05) * 4;
+        const x = anchorX + p.lx * scale + wave;
+        const y = anchorTop + p.ly * scale;
 
-        const x = anchorX + p.lx * scale + wx;
-        const y = anchorTop + p.ly * scale + wy;
-
+        ctx.globalAlpha = 0.65;
         ctx.fillStyle = p.color;
-        ctx.globalAlpha = 0.55;
-        ctx.fillRect(x, y, p.size, p.size);
+        ctx.fillRect(x, y, p.size * 2, p.size * 2);
       }
-      requestAnimationFrame(loop);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
     }
-    requestAnimationFrame(loop);
+
+    resizeCanvas();
+    function frame(now){
+      const dt = Math.min((now - lastT) / 1000, 0.05);
+      lastT = now;
+      draw(now / 1000, now, dt);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
   };
-  initGirlCanvas();
+
+  if('requestIdleCallback' in window){
+    requestIdleCallback(initGirlCanvas, {timeout: 300});
+  } else {
+    setTimeout(initGirlCanvas, 60);
+  }
+
+  // Пузырьки поднимающиеся
+  const bubbleContainer = document.getElementById('bubbles');
+  for(let i=0; i<20; i++){
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    const size = 4 + Math.random()*18;
+    b.style.width = size+'px';
+    b.style.height = size+'px';
+    b.style.left = Math.random()*100+'vw';
+    b.style.animationDuration = (10 + Math.random()*12)+'s';
+    b.style.animationDelay = (Math.random()*10)+'s';
+    bubbleContainer.appendChild(b);
+  }
 
   // ============ ТОВАРЫ ИЗ GOOGLE ТАБЛИЦЫ ============
   const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTOBTxiZK0_A81YpK5AHOlejgVjULo4y6osFKTb9ZN5Ncct_KDdVk5JU_l1GsI8QeSl8-RWOvd-KE1P/pub?gid=0&single=true&output=csv";
@@ -774,7 +749,6 @@
 
   const grid = document.getElementById('grid');
   const itemCount = document.getElementById('itemCount');
-  const statItems = document.getElementById('statItems');
 
   function renderItems(items){
     grid.innerHTML = '';
@@ -796,11 +770,7 @@
       grid.appendChild(el);
     });
     itemCount.textContent = items.length + ' позиций / глубина растёт';
-    if(statItems){
-      statItems.textContent = String(items.length).padStart(2,'0');
-    }
 
-    const revealItems = document.querySelectorAll('.item');
     const observer = new IntersectionObserver((entries)=>{
       entries.forEach(entry=>{
         if(entry.isIntersecting){
@@ -808,172 +778,60 @@
         }
       });
     },{threshold:0.15});
-    revealItems.forEach(el=>observer.observe(el));
+
+    document.querySelectorAll('.item').forEach(el => observer.observe(el));
   }
 
-  function loadItems(){
-    if(!SHEET_CSV_URL){
-      renderItems(fallbackItems);
-      return;
-    }
-    grid.innerHTML = '<div class="loading-row"><div class="loading-dot"></div>Загружаем архив из таблицы...</div>';
-
+  if(window.Papa){
     Papa.parse(SHEET_CSV_URL, {
       download: true,
       header: true,
-      skipEmptyLines: true,
-      complete: function(results){
-        const rows = results.data
-          .filter(r => r.name && r.name.trim())
-          .map(r => ({
-            name: r.name.trim(),
-            tag: (r.tag || '').trim(),
-            price: (r.price || '').trim(),
-            label: (r.label || r.name).trim()
-          }));
-        renderItems(rows.length ? rows : fallbackItems);
+      complete: function(results) {
+        if(results.data && results.data.length > 0){
+          const valid = results.data.filter(item => item.name && item.price);
+          if(valid.length > 0){
+            renderItems(valid);
+            return;
+          }
+        }
+        renderItems(fallbackItems);
       },
       error: function(){
         renderItems(fallbackItems);
       }
     });
+  } else {
+    renderItems(fallbackItems);
   }
 
-  loadItems();
+  // Общие эффекты появления (Reveal)
+  const revealObserver = new IntersectionObserver((entries)=>{
+    entries.forEach(entry => {
+      if(entry.isIntersecting){
+        entry.target.classList.add('visible');
+      }
+    });
+  }, {threshold: 0.1});
 
-  // share button
+  document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+  // Кнопка шеринга
   const shareBtn = document.getElementById('shareBtn');
   const shareToast = document.getElementById('shareToast');
-
-  function showToast(text){
-    shareToast.textContent = text;
+  shareBtn.addEventListener('click', ()=>{
+    navigator.clipboard.writeText(window.location.href);
     shareToast.classList.add('show');
-    setTimeout(()=> shareToast.classList.remove('show'), 2200);
-  }
-
-  shareBtn.addEventListener('click', async ()=>{
-    const shareData = {
-      title: 'ANOXIA',
-      text: 'ANOXIA — культ утопленников. Вещи для тех, кто живёт на глубине.',
-      url: window.location.href
-    };
-    if(navigator.share){
-      try{
-        await navigator.share(shareData);
-      }catch(err){}
-    } else {
-      try{
-        await navigator.clipboard.writeText(shareData.url);
-        showToast('Ссылка скопирована');
-      }catch(err){
-        showToast('Не удалось скопировать');
-      }
-    }
+    setTimeout(()=> shareToast.classList.remove('show'), 2000);
   });
 
-  // ring subscription
+  // Подписка / Кольцо
   const subscribeRing = document.getElementById('subscribeRing');
   const breathFlash = document.getElementById('breathFlash');
-  const TELEGRAM_URL = 'https://t.me/xxzffyw';
-  let ringBusy = false;
-
   subscribeRing.addEventListener('click', ()=>{
-    if(ringBusy) return;
-    ringBusy = true;
-
-    subscribeRing.classList.add('pulse');
-
-    setTimeout(()=>{
-      subscribeRing.classList.remove('pulse');
-      subscribeRing.classList.add('frozen');
-
-      setTimeout(()=>{
-        subscribeRing.classList.remove('frozen');
-        subscribeRing.classList.add('burst');
-        breathFlash.classList.add('burst');
-
-        setTimeout(()=>{
-          window.open(TELEGRAM_URL, '_blank', 'noopener');
-          subscribeRing.classList.remove('burst');
-          breathFlash.classList.remove('burst');
-          ringBusy = false;
-        }, 600);
-
-      }, 350);
-
-    }, 900);
+    breathFlash.classList.add('burst');
+    setTimeout(()=> breathFlash.classList.remove('burst'), 600);
+    alert('Вы зафиксированы на глубине. Ожидайте закрытый дроп.');
   });
-
-  // ============ ЧАСТИЦА-СФЕРА ============
-  (function initParticleSphere(){
-    const canvas = document.getElementById('particleSphere');
-    if(!canvas) return;
-    const ctx = canvas.getContext('2d');
-
-    const SIZE = 420;
-    const RADIUS = 160;
-    const POINT_COUNT = 260;
-
-    let dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = SIZE * dpr;
-    canvas.height = SIZE * dpr;
-    canvas.style.width = SIZE + 'px';
-    canvas.style.height = SIZE + 'px';
-    ctx.scale(dpr, dpr);
-
-    const points = [];
-    const golden = Math.PI * (3 - Math.sqrt(5));
-    for(let i = 0; i < POINT_COUNT; i++){
-      const y = 1 - (i / (POINT_COUNT - 1)) * 2;
-      const r = Math.sqrt(1 - y*y);
-      const theta = golden * i;
-      const x = Math.cos(theta) * r;
-      const z = Math.sin(theta) * r;
-      points.push({x, y, z});
-    }
-
-    let angle = 0;
-
-    function draw(){
-      ctx.clearRect(0, 0, SIZE, SIZE);
-      angle += 0.0028;
-
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-
-      const projected = points.map(p=>{
-        const x = p.x * cos - p.z * sin;
-        const z = p.x * sin + p.z * cos;
-        const y = p.y;
-
-        const perspective = 260 / (260 + z * RADIUS);
-        const screenX = SIZE/2 + x * RADIUS * perspective;
-        const screenY = SIZE/2 + y * RADIUS * perspective;
-
-        return {screenX, screenY, z, perspective};
-      }).sort((a,b)=> a.z - b.z);
-
-      projected.forEach(p=>{
-        const depthFactor = (p.z + 1) / 2;
-        const size = 0.6 + depthFactor * 2.2;
-        const opacity = 0.15 + depthFactor * 0.55;
-
-        const color = depthFactor > 0.6
-          ? `rgba(233,237,240,${opacity})`
-          : `rgba(58,124,165,${opacity})`;
-
-        ctx.beginPath();
-        ctx.arc(p.screenX, p.screenY, size, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-      });
-
-      requestAnimationFrame(draw);
-    }
-
-    draw();
-  })();
 </script>
-
 </body>
 </html>
