@@ -48,6 +48,14 @@
     mix-blend-mode:overlay;
   }
 
+  /* тонущая фигура из пикселей — фон за текстом */
+  .girl-canvas{
+    position:fixed;
+    inset:0;
+    z-index:1;
+    pointer-events:none;
+  }
+
   /* rising bubbles / oxygen particles */
   .bubbles{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden;}
   .bubble{
@@ -99,7 +107,35 @@
   .hero .depth-lines{
     position:absolute;inset:0;z-index:0;opacity:0.25;
     background-image:repeating-linear-gradient(180deg, transparent 0 78px, rgba(58,124,165,0.4) 78px 79px);
+    will-change:transform;
   }
+
+  .hero .light-rays{
+    position:absolute;inset:0;z-index:0;
+    background:
+      linear-gradient(180deg, rgba(183,196,204,0.10) 0%, transparent 45%),
+      repeating-conic-gradient(from 200deg at 50% -20%,
+        rgba(233,237,240,0.05) 0deg 6deg, transparent 6deg 18deg);
+    opacity:0.5;
+    mix-blend-mode:screen;
+    animation:rays-drift 22s ease-in-out infinite alternate;
+    will-change:transform;
+  }
+  @keyframes rays-drift{
+    0%{transform:translateX(-2%) rotate(0deg);}
+    100%{transform:translateX(2%) rotate(0.6deg);}
+  }
+
+  .hero h1, .hero .tagline, .oxygen-meter{
+    will-change:transform;
+  }
+
+  .reveal{
+    opacity:0;
+    transform:translateY(36px);
+    transition:opacity 0.9s cubic-bezier(.2,.7,.2,1), transform 0.9s cubic-bezier(.2,.7,.2,1);
+  }
+  .reveal.visible{opacity:1;transform:translateY(0);}
 
   .oxygen-meter{
     position:absolute;top:100px;
@@ -182,6 +218,7 @@
     line-height:1.15;
     font-weight:500;
     color:var(--pale);
+    transition:opacity 0.9s cubic-bezier(.2,.7,.2,1) 0.05s, transform 0.9s cubic-bezier(.2,.7,.2,1) 0.05s;
   }
   .manifesto h2 em{
     font-style:normal;
@@ -193,9 +230,15 @@
     line-height:1.9;
     color:var(--foam);
     max-width:640px;
+    opacity:0;
+    transform:translateY(20px);
+    transition:opacity 0.8s cubic-bezier(.2,.7,.2,1), transform 0.8s cubic-bezier(.2,.7,.2,1);
   }
+  .manifesto p:nth-of-type(1){transition-delay:0.15s;}
+  .manifesto p:nth-of-type(2){transition-delay:0.3s;}
+  .manifesto.visible p{opacity:1;transform:translateY(0);}
 
-  /* ============ GRID / POSTS (ITEMS) ============ */
+  /* ============ GRID / POSTS ============ */
   .archive{
     padding:100px 5vw 160px;
     position:relative;
@@ -212,20 +255,6 @@
   .archive-head h2{font-size:clamp(28px,4vw,48px);}
   .archive-head .count{font-size:12px;color:var(--foam);letter-spacing:0.1em;}
 
-  .loading-row{
-    padding:40px 0;
-    font-size:12px;
-    color:var(--foam);
-    letter-spacing:0.15em;
-    display:flex;align-items:center;gap:12px;
-  }
-  .loading-dot{
-    width:6px;height:6px;border-radius:50%;
-    background:var(--signal-blue);
-    animation:blink 1s ease-in-out infinite;
-  }
-  @keyframes blink{0%,100%{opacity:0.2;}50%{opacity:1;}}
-
   .grid{
     display:grid;
     grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
@@ -241,7 +270,10 @@
     transform:translateY(40px);
     transition:opacity 0.8s ease, transform 0.8s ease;
   }
-  .item.visible{opacity:1;transform:translateY(0);}
+  .item.visible{
+    opacity:1;
+    transform:translateY(0);
+  }
 
   .item .thumb{
     aspect-ratio:3/4;
@@ -257,34 +289,13 @@
     font-size:11px;color:var(--foam);letter-spacing:0.1em;
     z-index:3;
   }
-  .item .thumb::after{
-    content:'';
-    position:absolute;inset:0;
-    background:repeating-linear-gradient(180deg, transparent 0 3px, rgba(4,7,10,0.15) 3px 4px);
-    opacity:0.5;
-  }
-  .item .ripple{
-    position:absolute;inset:0;
-    display:flex;align-items:center;justify-content:center;
-    font-family:'Oswald',sans-serif;
-    font-size:15px;
-    letter-spacing:0.15em;
-    color:rgba(233,237,240,0.35);
-    text-transform:uppercase;
-    transition:transform 0.6s cubic-bezier(.2,.8,.2,1), color 0.6s ease;
-  }
-  .item:hover .ripple{transform:scale(1.08);color:var(--pale);}
-  .item:hover .thumb{filter:brightness(1.15);}
 
   .item .info{
     padding:18px 4px 28px;
     display:flex;justify-content:space-between;align-items:baseline;
   }
-  .item .info .name{font-size:13px;letter-spacing:0.05em;}
-  .item .info .tag{font-size:11px;color:var(--signal-blue);}
-  .item .info .price{font-size:12px;color:var(--foam);}
 
-  /* ============ SOUND / MOTION SIGNATURE ============ */
+  /* ============ SIGNATURE ============ */
   .signature{
     padding:160px 5vw;
     text-align:center;
@@ -295,15 +306,6 @@
     font-size:clamp(40px,7vw,90px);
     line-height:1;
     color:var(--pale);
-  }
-  .signature .breath{
-    position:relative;
-    display:inline-block;
-    margin-top:20px;
-  }
-  .signature p{
-    max-width:520px;margin:36px auto 0;
-    font-size:13px;line-height:1.8;color:var(--foam);
   }
 
   .ring{
@@ -316,71 +318,6 @@
     cursor:pointer;
     transition:transform 0.15s ease, border-color 0.3s ease;
     -webkit-tap-highlight-color:transparent;
-  }
-  .ring:hover{
-    border-color:rgba(95,168,211,0.8);
-    transform:scale(1.03);
-  }
-  .ring::before,.ring::after{
-    content:'';position:absolute;inset:0;border-radius:50%;
-    border:1px solid rgba(95,168,211,0.25);
-    animation:expand 4s ease-out infinite;
-  }
-  .ring::after{animation-delay:2s;}
-  @keyframes expand{
-    0%{transform:scale(1);opacity:0.8;}
-    100%{transform:scale(1.8);opacity:0;}
-  }
-  .ring span{font-size:10px;letter-spacing:0.2em;color:var(--foam);position:relative;z-index:2;}
-
-  /* эффект "пульс останавливается" при клике */
-  .ring.pulse{animation:pulse-accelerate 0.9s ease-in-out forwards;}
-  @keyframes pulse-accelerate{
-    0%{transform:scale(1);}
-    8%{transform:scale(1.07);}
-    16%{transform:scale(1);}
-    30%{transform:scale(1.07);}
-    38%{transform:scale(1);}
-    48%{transform:scale(1.09);}
-    54%{transform:scale(1);}
-    62%{transform:scale(1.09);}
-    67%{transform:scale(1);}
-    73%{transform:scale(1.11);}
-    77%{transform:scale(1);}
-    82%{transform:scale(1.11);}
-    85%{transform:scale(1);}
-    100%{transform:scale(1);}
-  }
-  .ring.frozen{
-    animation:none !important;
-    transition:none !important;
-    transform:scale(1) !important;
-  }
-  .ring.frozen::before,
-  .ring.frozen::after{
-    animation-play-state:paused;
-  }
-
-  .ring.burst{animation:ring-burst 0.6s ease-out forwards;}
-  @keyframes ring-burst{
-    0%{transform:scale(1);}
-    30%{transform:scale(0.92);}
-    100%{transform:scale(2.4);opacity:0;}
-  }
-  .breath-flash{
-    position:absolute;inset:0;
-    border-radius:50%;
-    background:radial-gradient(circle, rgba(95,168,211,0.9) 0%, rgba(95,168,211,0) 70%);
-    opacity:0;
-    pointer-events:none;
-  }
-  .breath-flash.burst{
-    animation:flash-burst 0.6s ease-out forwards;
-  }
-  @keyframes flash-burst{
-    0%{opacity:0;transform:scale(0.8);}
-    40%{opacity:1;transform:scale(1.6);}
-    100%{opacity:0;transform:scale(2.8);}
   }
 
   /* ============ FOOTER ============ */
@@ -404,7 +341,6 @@
     border-top:1px solid rgba(233,237,240,0.08);
     color:var(--foam);
     font-size:11px;
-    letter-spacing:0.05em;
   }
 
   @media (prefers-reduced-motion: reduce){
@@ -417,7 +353,6 @@
     .manifesto,.archive,.signature{padding-left:6vw;padding-right:6vw;}
   }
 
-  /* ============ SHARE BUTTON ============ */
   .share-btn{
     position:fixed;
     right:5vw;bottom:32px;
@@ -431,46 +366,18 @@
     color:var(--pale);
     font-family:'Space Mono',monospace;
     font-size:11px;
-    letter-spacing:0.15em;
-    text-transform:uppercase;
     cursor:pointer;
-    transition:border-color 0.3s ease, transform 0.3s ease, background 0.3s ease;
-  }
-  .share-btn:hover{
-    border-color:var(--signal-blue);
-    background:rgba(18,48,73,0.85);
-    transform:translateY(-2px);
-  }
-  .share-btn svg{width:14px;height:14px;flex-shrink:0;}
-  .toast{
-    position:fixed;
-    right:5vw;bottom:88px;
-    background:var(--signal-blue);
-    color:var(--abyss);
-    font-size:11px;letter-spacing:0.1em;
-    padding:10px 16px;
-    border-radius:6px;
-    opacity:0;
-    transform:translateY(10px);
-    transition:opacity 0.3s ease, transform 0.3s ease;
-    pointer-events:none;
-    z-index:200;
-  }
-  .toast.show{opacity:1;transform:translateY(0);}
-
-  @media (max-width:640px){
-    .share-btn{right:6vw;bottom:20px;padding:12px 18px;font-size:10px;}
-    .toast{right:6vw;bottom:78px;}
   }
 </style>
 </head>
 <body>
 
 <div class="noise"></div>
+<canvas class="girl-canvas" id="girlCanvas"></canvas>
 <div class="bubbles" id="bubbles"></div>
 
 <button class="share-btn" id="shareBtn">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
     <circle cx="18" cy="5" r="3"></circle>
     <circle cx="6" cy="12" r="3"></circle>
     <circle cx="18" cy="19" r="3"></circle>
@@ -479,7 +386,6 @@
   </svg>
   Поделиться
 </button>
-<div class="toast" id="shareToast">Ссылка скопирована</div>
 
 <nav>
   <div class="mark">ANOXIA</div>
@@ -492,6 +398,7 @@
 
 <section class="hero">
   <div class="depth-lines"></div>
+  <div class="light-rays"></div>
 
   <div class="oxygen-meter">
     <span>O₂</span>
@@ -508,7 +415,7 @@
   </div>
 </section>
 
-<section class="manifesto" id="manifesto">
+<section class="manifesto reveal" id="manifesto">
   <span class="eyebrow">О бренде</span>
   <h2>Anoxia — это состояние, когда <em>воздуха больше нет</em>, а тело ещё не сдалось.</h2>
   <p>
@@ -517,28 +424,23 @@
     сопротивления поверхности. Чёрный — это глубина. Белый — последний вдох. Синий — вода,
     которая забирает и держит одновременно.
   </p>
-  <p>
-    Это не масс-маркет и не тренд. Это архив для тех, кто узнаёт своих без слов.
-  </p>
+  <p>Это не масс-маркет и не тренд. Это архив для тех, кто узнаёт своих без слов.</p>
 </section>
 
 <section class="archive" id="archive">
-  <div class="archive-head">
+  <div class="archive-head reveal">
     <h2>Архив вещей</h2>
-    <span class="count" id="itemCount">загрузка...</span>
+    <span class="count" id="itemCount">06 ИЗДЕЛИЙ</span>
   </div>
 
-  <div class="grid" id="grid">
-    <!-- items generated by JS -->
-  </div>
+  <div class="grid" id="grid"></div>
 </section>
 
-<section class="signature" id="signature">
+<section class="signature reveal" id="signature">
   <span class="eyebrow">Дыши в ритме бренда</span>
   <h2>Задержи<br>дыхание</h2>
   <p>Подпишись на архив — новые вещи публикуются без анонса, партиями по 6, и не переиздаются.</p>
   <div class="ring" id="subscribeRing">
-    <div class="breath-flash" id="breathFlash"></div>
     <span>ПОДПИСКА</span>
   </div>
 </section>
@@ -554,7 +456,6 @@
     <a href="https://t.me/xxzffyw" target="_blank" rel="noopener">Telegram</a>
     <a href="https://www.instagram.com/ledkov.aa?igsh=MXVxams1bGptdG5ueQ==" target="_blank" rel="noopener">Instagram</a>
     <a href="https://www.tiktok.com/@anoxiaa.a?_r=1&_t=ZS-98QH8CLe73l" target="_blank" rel="noopener">TikTok</a>
-    <a href="#">Почта</a>
   </div>
   <div class="col">
     <h3>Город</h3>
@@ -567,173 +468,285 @@
 </footer>
 
 <script>
-  // rising bubbles
+  // ============ ТОНУЩАЯ ФИГУРА ИЗ ПИКСЕЛЕЙ (ОПТИМИЗИРОВАННАЯ V2) ============
+  const initGirlCanvas = function(){
+    const canvas = document.getElementById('girlCanvas');
+    const ctx = canvas.getContext('2d');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const cores = navigator.hardwareConcurrency || 4;
+    const narrowScreen = window.innerWidth <= 768;
+    const perfTier = (narrowScreen && cores <= 4) ? 'low' : (narrowScreen || cores <= 4) ? 'mid' : 'high';
+    const PERF = {
+      low:  {dprCap: 1.0, particleTarget: 2500, envDensity: 0.03, useBlur: false, auraRatio: 8, skipWave: true},
+      mid:  {dprCap: 1.5, particleTarget: 4500, envDensity: 0.06, useBlur: true,  auraRatio: 6, skipWave: false},
+      high: {dprCap: 2.0, particleTarget: 7000, envDensity: 0.09, useBlur: true,  auraRatio: 4, skipWave: false}
+    }[perfTier];
+
+    // LUT таблицы sin/cos
+    const LUT_SIZE = 2048;
+    const LUT_SCALE = LUT_SIZE / (Math.PI * 2);
+    const SIN_LUT = new Float32Array(LUT_SIZE);
+    const COS_LUT = new Float32Array(LUT_SIZE);
+    for(let i = 0; i < LUT_SIZE; i++){
+      const a = (i / LUT_SIZE) * Math.PI * 2;
+      SIN_LUT[i] = Math.sin(a);
+      COS_LUT[i] = Math.cos(a);
+    }
+    function fastSin(x){
+      let idx = ((x * LUT_SCALE) | 0) % LUT_SIZE;
+      return SIN_LUT[idx < 0 ? idx + LUT_SIZE : idx];
+    }
+    function fastCos(x){
+      let idx = ((x * LUT_SCALE) | 0) % LUT_SIZE;
+      return COS_LUT[idx < 0 ? idx + LUT_SIZE : idx];
+    }
+
+    let W = 0, H = 0, DPR = 1;
+    function resizeCanvas(){
+      DPR = Math.min(window.devicePixelRatio || 1, PERF.dprCap);
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = Math.round(W * DPR);
+      canvas.height = Math.round(H * DPR);
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      buildEnvParticles();
+    }
+    let resizeTimer = null;
+    function debouncedResize(){
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(resizeCanvas, 150);
+    }
+
+    let envParticles = [];
+    function buildEnvParticles(){
+      const n = Math.round(Math.min(window.innerWidth, 1400) * PERF.envDensity);
+      envParticles = [];
+      for(let i = 0; i < n; i++){
+        const depth = 0.4 + Math.random() * 0.6;
+        envParticles.push({
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+          depth,
+          size: (0.6 + Math.random() * 1.4) * (0.6 + depth * 0.6),
+          alpha: (0.03 + Math.random() * 0.07) * depth,
+          phase: Math.random() * Math.PI * 2,
+          speed: 0.05 + Math.random() * 0.08,
+          fall: 2 + Math.random() * 6
+        });
+      }
+    }
+
+    const LW = 480, LH = 240;
+    const SIL_W = 200, SIL_H = 100;
+    const silCanvas = document.createElement('canvas');
+    silCanvas.width = SIL_W;
+    silCanvas.height = SIL_H;
+    const silCtx = silCanvas.getContext('2d');
+
+    // === Полноценно дорисованный спрайт (включая ступни, икры, бёдра и V-просвет) ===
+    const SPRITE_PIXELS = [
+      [0, [[170, 172, 111, 118, 129], [175, 199, 112, 120, 131]]],
+      [1, [[175, 199, 113, 121, 132]]],
+      [2, [[175, 199, 112, 120, 131]]],
+      [3, [[174, 177, 110, 117, 128], [179, 199, 113, 121, 132]]],
+      [4, [[172, 173, 112, 120, 131], [176, 176, 115, 122, 133], [179, 179, 110, 117, 128], [182, 183, 113, 121, 132], [187, 187, 109, 117, 128], [189, 190, 110, 118, 129], [193, 195, 114, 122, 133], [198, 198, 109, 117, 128]]],
+      [5, [[171, 172, 112, 120, 131], [175, 175, 110, 118, 129], [177, 194, 112, 120, 131]]],
+      [6, [[171, 172, 114, 121, 132], [174, 175, 111, 119, 130], [177, 179, 113, 121, 132], [181, 184, 112, 120, 131], [187, 187, 109, 117, 128], [189, 195, 110, 117, 128]]],
+      [7, [[176, 176, 110, 118, 129], [189, 193, 110, 118, 129], [195, 195, 110, 117, 128]]],
+      [8, [[175, 176, 110, 118, 129], [182, 184, 110, 118, 129], [189, 190, 110, 117, 128], [192, 193, 110, 118, 129]]],
+      [11, [[123, 125, 170, 180, 191]]], [12, [[123, 126, 146, 155, 166]]], [13, [[126, 129, 122, 130, 141]]], [14, [[122, 125, 187, 197, 209], [128, 131, 199, 209, 221]]], [15, [[124, 127, 127, 135, 146], [129, 133, 167, 176, 188]]], [16, [[131, 135, 190, 200, 212]]], [17, [[131, 136, 131, 139, 150]]], [18, [[132, 137, 129, 137, 148]]], [19, [[133, 138, 172, 181, 193]]], [20, [[127, 129, 196, 206, 218], [133, 140, 162, 171, 183]]],
+      [21, [[128, 140, 167, 176, 188]]], [22, [[129, 141, 135, 143, 154]]], [23, [[132, 143, 147, 155, 167]]], [24, [[133, 144, 173, 182, 194]]], [25, [[136, 145, 108, 116, 129]]], [26, [[101, 106, 114, 122, 136], [140, 145, 102, 110, 123]]], [27, [[102, 107, 101, 109, 122], [141, 145, 115, 124, 137]]], [28, [[103, 107, 91, 99, 112], [109, 110, 152, 161, 176], [142, 147, 127, 136, 150]]], [29, [[99, 111, 100, 108, 121], [142, 147, 125, 134, 148]]], [30, [[104, 112, 152, 162, 177], [142, 148, 111, 119, 133]]],
+      [31, [[101, 113, 150, 160, 175], [143, 148, 115, 123, 137]]], [32, [[99, 101, 116, 125, 139], [105, 115, 134, 143, 158], [143, 150, 103, 111, 124]]], [33, [[103, 116, 96, 104, 117], [144, 150, 112, 121, 134]]], [34, [[110, 118, 117, 126, 140], [144, 150, 113, 122, 135], [184, 184, 99, 107, 120]]], [35, [[111, 119, 116, 125, 138], [144, 152, 110, 119, 132], [184, 184, 152, 162, 177]]], [36, [[112, 120, 97, 105, 118], [144, 152, 94, 102, 115], [184, 184, 154, 164, 179]]], [37, [[114, 121, 116, 125, 139], [145, 153, 112, 121, 134], [197, 197, 154, 164, 179]]], [38, [[116, 122, 91, 99, 112], [145, 154, 112, 120, 134], [197, 197, 151, 161, 175]]], [39, [[118, 123, 112, 120, 134], [146, 155, 118, 127, 140], [192, 192, 154, 164, 179], [196, 197, 150, 160, 175]]], [40, [[119, 124, 121, 130, 143], [146, 155, 119, 128, 141], [192, 192, 146, 156, 171], [196, 196, 140, 150, 164]]],
+      [41, [[120, 125, 118, 127, 141], [146, 156, 91, 99, 112], [192, 192, 148, 157, 172]]], [42, [[121, 127, 121, 130, 143], [147, 156, 109, 117, 131], [191, 192, 128, 137, 151]]], [43, [[122, 128, 108, 116, 129], [147, 157, 103, 111, 125], [183, 183, 131, 141, 155], [190, 191, 86, 94, 107], [194, 194, 124, 133, 147], [199, 199, 95, 103, 115]]], [44, [[122, 129, 117, 125, 139], [148, 157, 108, 116, 130], [183, 183, 131, 140, 154], [190, 190, 130, 139, 154], [193, 195, 96, 103, 116], [198, 199, 153, 163, 178]]], [45, [[123, 130, 129, 138, 152], [148, 158, 107, 115, 128], [181, 181, 148, 158, 173], [183, 184, 138, 147, 162], [190, 190, 145, 155, 170], [193, 196, 103, 111, 124], [198, 199, 155, 165, 180]]],
+      /* --- Ноги (доработка геометрического контура) --- */
+      [46, [[15, 45, 110, 118, 130], [55, 85, 115, 123, 135], [124, 132, 115, 123, 137], [149, 158, 110, 118, 132]]],
+      [47, [[12, 48, 112, 120, 132], [52, 88, 118, 126, 138], [125, 133, 110, 119, 132], [150, 158, 115, 123, 137]]],
+      [48, [[10, 50, 115, 123, 135], [50, 90, 120, 128, 140], [126, 134, 110, 119, 132], [150, 158, 116, 124, 138]]],
+      [49, [[8, 52, 118, 126, 138], [48, 92, 122, 130, 142], [126, 136, 87, 95, 107], [150, 159, 100, 108, 121]]],
+      [50, [[5, 55, 120, 128, 140], [45, 95, 125, 133, 145], [127, 137, 70, 79, 93], [152, 160, 87, 96, 113]]]
+    ];
+
+    for(const [y, runs] of SPRITE_PIXELS){
+      for(const [x1, x2, r, g, b] of runs){
+        silCtx.fillStyle = `rgb(${r},${g},${b})`;
+        silCtx.fillRect(x1, y, x2 - x1 + 1, 1);
+      }
+    }
+
+    function buildSilhouettePoints(){
+      const off = document.createElement('canvas');
+      off.width = LW; off.height = LH;
+      const octx = off.getContext('2d');
+      octx.imageSmoothingEnabled = false;
+      octx.drawImage(silCanvas, 0, 0, LW, LH);
+
+      const img = octx.getImageData(0, 0, LW, LH).data;
+      const alphaAt = (x, y) => (x < 0 || x >= LW || y < 0 || y >= LH) ? 0 : img[(y * LW + x) * 4 + 3];
+
+      const pts = [];
+      for(let y = 0; y < LH; y++){
+        for(let x = 0; x < LW; x++){
+          if(alphaAt(x, y) <= 120) continue;
+          let outside = 0;
+          const offsets = [[3,0],[-3,0],[0,3],[0,-3]];
+          for(const [ox, oy] of offsets){ if(alphaAt(x + ox, y + oy) <= 120) outside++; }
+          const edgeScore = outside / offsets.length;
+          pts.push({x: x - LW / 2, y: y - LH / 2, edge: edgeScore});
+        }
+      }
+
+      const target = PERF.particleTarget;
+      if(pts.length > target){
+        for(let i = pts.length - 1; i > 0; i--){
+          const j = Math.floor(Math.random() * (i + 1));
+          [pts[i], pts[j]] = [pts[j], pts[i]];
+        }
+        pts.length = target;
+      }
+      return pts;
+    }
+
+    const basePoints = buildSilhouettePoints();
+    const palette = [
+      {stop: 0.0, color: [228, 232, 236]},
+      {stop: 0.3, color: [165, 172, 180]},
+      {stop: 0.6, color: [68, 76, 88]},
+      {stop: 1.0, color: [5, 10, 16]}
+    ];
+
+    function paletteColor(t){
+      t = Math.min(Math.max(t, 0), 1);
+      let a = palette[0], b = palette[palette.length - 1];
+      for(let i = 0; i < palette.length - 1; i++){
+        if(t >= palette[i].stop && t <= palette[i + 1].stop){
+          a = palette[i]; b = palette[i + 1]; break;
+        }
+      }
+      const span = (b.stop - a.stop) || 1;
+      const lt = (t - a.stop) / span;
+      return [
+        Math.round(a.color[0] + (b.color[0] - a.color[0]) * lt),
+        Math.round(a.color[1] + (b.color[1] - a.color[1]) * lt),
+        Math.round(a.color[2] + (b.color[2] - a.color[2]) * lt)
+      ];
+    }
+
+    const bucketCache = new Map();
+    function getBucketColor(t, brightness){
+      const key = ((t * 8) | 0) * 4 + Math.max(0, ((brightness * 4) | 0));
+      if(!bucketCache.has(key)){
+        const [r, g, b] = paletteColor(t);
+        bucketCache.set(key, `rgb(${r},${g},${b})`);
+      }
+      return {color: bucketCache.get(key), key};
+    }
+
+    const particles = basePoints.map(p => {
+      const t = Math.min(Math.max((p.y + LH / 2) / LH, 0), 1);
+      const depth = Math.random() < 0.5 ? 0.5 : 1;
+      const brightness = (0.7 + depth * 0.3) * (1 - p.edge * 0.35);
+      const {color, key} = getBucketColor(t, brightness);
+
+      return {
+        lx: p.x, ly: p.y,
+        phase: Math.random() * Math.PI * 2,
+        speed: (0.2 + Math.random() * 0.2) * (0.6 + depth * 0.4),
+        depth, edge: p.edge,
+        size: (0.8 + Math.random() * 1.2) * depth,
+        color, colorBucket: key,
+        vx: 0, vy: 0, gravityScale: Math.random() < 0.18 ? 0.12 : 1,
+        flying: false, originX: 0, originY: 0
+      };
+    });
+    particles.sort((a, b) => a.colorBucket - b.colorBucket);
+
+    function getScale(){ return Math.min(window.innerWidth * 0.7, 760) / LW; }
+    function getScrollProgress(){
+      const doc = document.documentElement;
+      const scrollTop = window.scrollY || doc.scrollTop || 0;
+      const max = doc.scrollHeight - window.innerHeight;
+      return max <= 0 ? 0 : Math.min(Math.max(scrollTop / max, 0), 1);
+    }
+
+    let maxScroll = 0;
+    function draw(time, dt){
+      ctx.clearRect(0, 0, W, H);
+
+      // Фоновые частицы воды
+      ctx.globalCompositeOperation = 'lighter';
+      for(const e of envParticles){
+        e.y += e.fall * dt;
+        if(e.y > H + 10){ e.y = -10; e.x = Math.random() * W; }
+        const sway = fastSin(time * e.speed + e.phase) * 6;
+        ctx.globalAlpha = e.alpha;
+        ctx.fillStyle = 'rgb(180,196,206)';
+        ctx.fillRect(e.x + sway, e.y, e.size, e.size);
+      }
+
+      // Главный силуэт
+      const scale = getScale();
+      const anchorX = W / 2;
+      const anchorTop = H * 0.2 - maxScroll * H * 0.06;
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 0.6;
+      ctx.drawImage(silCanvas, anchorX - (LW * scale) / 2, anchorTop - (LH * scale) / 2, LW * scale, LH * scale);
+
+      let lastColor = null;
+      for(let i = 0; i < particles.length; i++){
+        const p = particles[i];
+        const wx = fastSin(time * p.speed + p.ly) * p.depth * 0.6;
+        const wy = fastCos(time * p.speed) * p.depth * 0.5;
+
+        const x = anchorX + p.lx * scale + wx;
+        const y = anchorTop + p.ly * scale + wy;
+
+        ctx.globalAlpha = 0.5 - p.edge * 0.25;
+        if(p.color !== lastColor){ ctx.fillStyle = p.color; lastColor = p.color; }
+        ctx.fillRect(x, y, p.size * 2, p.size * 2);
+      }
+    }
+
+    resizeCanvas();
+    let lastT = performance.now();
+
+    function loop(now){
+      const dt = Math.min((now - lastT) / 1000, 0.05);
+      lastT = now;
+      const scrollP = getScrollProgress();
+      if(scrollP > maxScroll) maxScroll = scrollP;
+
+      draw(now / 1000, dt);
+      requestAnimationFrame(loop);
+    }
+
+    if(!reduceMotion){
+      requestAnimationFrame(loop);
+      window.addEventListener('resize', debouncedResize, {passive: true});
+    }
+  };
+
+  if('requestIdleCallback' in window){
+    requestIdleCallback(initGirlCanvas, {timeout: 300});
+  } else {
+    setTimeout(initGirlCanvas, 60);
+  }
+
+  // Создание всплывающих пузырьков
   const bubbleContainer = document.getElementById('bubbles');
-  const bubbleCount = 22;
-  for(let i=0;i<bubbleCount;i++){
+  for(let i = 0; i < 22; i++){
     const b = document.createElement('div');
     b.className = 'bubble';
-    const size = 4 + Math.random()*22;
-    b.style.width = size+'px';
-    b.style.height = size+'px';
-    b.style.left = Math.random()*100+'vw';
-    b.style.animationDuration = (10 + Math.random()*14)+'s';
-    b.style.animationDelay = (Math.random()*14)+'s';
+    b.style.left = Math.random() * 100 + 'vw';
+    b.style.width = (4 + Math.random() * 8) + 'px';
+    b.style.height = b.style.width;
+    b.style.animationDuration = (6 + Math.random() * 10) + 's';
+    b.style.animationDelay = (Math.random() * 8) + 's';
     bubbleContainer.appendChild(b);
   }
-
-  // ============ ТОВАРЫ ИЗ GOOGLE ТАБЛИЦЫ ============
-  // Вставь сюда ссылку на опубликованный CSV из Google Таблицы (см. гайд в чате)
-  const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTOBTxiZK0_A81YpK5AHOlejgVjULo4y6osFKTb9ZN5Ncct_KDdVk5JU_l1GsI8QeSl8-RWOvd-KE1P/pub?gid=0&single=true&output=csv";
-
-  // запасные товары — показываются, если таблица не подключена или недоступна
-  const fallbackItems = [
-    {name:'Худи «Бездна»', tag:'верх', price:'6 400 ₽', label:'ХУДИ'},
-    {name:'Лонгслив «Пузырь»', tag:'верх', price:'3 900 ₽', label:'ЛОНГ'},
-    {name:'Брюки «Придонный ил»', tag:'низ', price:'5 200 ₽', label:'БРЮКИ'},
-    {name:'Балаклава «Утопленник»', tag:'аксессуар', price:'2 100 ₽', label:'БАЛАКЛАВА'},
-    {name:'Куртка «Последний вдох»', tag:'верх', price:'9 800 ₽', label:'КУРТКА'},
-    {name:'Цепь «Якорь»', tag:'аксессуар', price:'2 700 ₽', label:'ЦЕПЬ'},
-  ];
-
-  const grid = document.getElementById('grid');
-  const itemCount = document.getElementById('itemCount');
-
-  function renderItems(items){
-    grid.innerHTML = '';
-    items.forEach((it, i)=>{
-      const el = document.createElement('div');
-      el.className = 'item';
-      el.innerHTML = `
-        <div class="thumb" data-num="${String(i+1).padStart(2,'0')}">
-          <div class="ripple">${it.label || it.name}</div>
-        </div>
-        <div class="info">
-          <div>
-            <div class="name">${it.name}</div>
-            <div class="tag">${it.tag}</div>
-          </div>
-          <div class="price">${it.price}</div>
-        </div>
-      `;
-      grid.appendChild(el);
-    });
-    itemCount.textContent = items.length + ' позиций / глубина растёт';
-
-    // scroll reveal — навешиваем заново на новые элементы
-    const revealItems = document.querySelectorAll('.item');
-    const observer = new IntersectionObserver((entries)=>{
-      entries.forEach(entry=>{
-        if(entry.isIntersecting){
-          entry.target.classList.add('visible');
-        }
-      });
-    },{threshold:0.15});
-    revealItems.forEach(el=>observer.observe(el));
-  }
-
-  function loadItems(){
-    if(!SHEET_CSV_URL){
-      renderItems(fallbackItems);
-      return;
-    }
-    grid.innerHTML = '<div class="loading-row"><div class="loading-dot"></div>Загружаем архив из таблицы...</div>';
-
-    Papa.parse(SHEET_CSV_URL, {
-      download: true,
-      header: true,
-      skipEmptyLines: true,
-      complete: function(results){
-        const rows = results.data
-          .filter(r => r.name && r.name.trim())
-          .map(r => ({
-            name: r.name.trim(),
-            tag: (r.tag || '').trim(),
-            price: (r.price || '').trim(),
-            label: (r.label || r.name).trim()
-          }));
-        renderItems(rows.length ? rows : fallbackItems);
-      },
-      error: function(){
-        renderItems(fallbackItems);
-      }
-    });
-  }
-
-  loadItems();
-
-  // share button
-  const shareBtn = document.getElementById('shareBtn');
-  const shareToast = document.getElementById('shareToast');
-
-  function showToast(text){
-    shareToast.textContent = text;
-    shareToast.classList.add('show');
-    setTimeout(()=> shareToast.classList.remove('show'), 2200);
-  }
-
-  shareBtn.addEventListener('click', async ()=>{
-    const shareData = {
-      title: 'ANOXIA',
-      text: 'ANOXIA — культ утопленников. Вещи для тех, кто живёт на глубине.',
-      url: window.location.href
-    };
-    if(navigator.share){
-      try{
-        await navigator.share(shareData);
-      }catch(err){
-        // пользователь отменил — ничего не делаем
-      }
-    } else {
-      try{
-        await navigator.clipboard.writeText(shareData.url);
-        showToast('Ссылка скопирована');
-      }catch(err){
-        showToast('Не удалось скопировать');
-      }
-    }
-  });
-
-  // кольцо подписки — "пульс останавливается" + переход в Telegram
-  const subscribeRing = document.getElementById('subscribeRing');
-  const breathFlash = document.getElementById('breathFlash');
-  const TELEGRAM_URL = 'https://t.me/xxzffyw';
-  let ringBusy = false;
-
-  const PULSE_DURATION = 900;   // учащающийся пульс
-  const FREEZE_DURATION = 350;  // полная тишина после пульса
-  const BURST_DURATION = 600;   // вспышка перед переходом
-
-  subscribeRing.addEventListener('click', ()=>{
-    if(ringBusy) return;
-    ringBusy = true;
-
-    // 1. учащающийся пульс
-    subscribeRing.classList.add('pulse');
-
-    setTimeout(()=>{
-      // 2. пульс снят, наступает полная заморозка (тишина)
-      subscribeRing.classList.remove('pulse');
-      subscribeRing.classList.add('frozen');
-
-      setTimeout(()=>{
-        // 3. заморозка снята, вспышка + переход
-        subscribeRing.classList.remove('frozen');
-        subscribeRing.classList.add('burst');
-        breathFlash.classList.add('burst');
-
-        setTimeout(()=>{
-          window.open(TELEGRAM_URL, '_blank', 'noopener');
-          subscribeRing.classList.remove('burst');
-          breathFlash.classList.remove('burst');
-          ringBusy = false;
-        }, BURST_DURATION);
-
-      }, FREEZE_DURATION);
-
-    }, PULSE_DURATION);
-  });
 </script>
-
 </body>
 </html>
